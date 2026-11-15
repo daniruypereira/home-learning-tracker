@@ -1,0 +1,1991 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The home learning tracker</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    };
+  </script>
+
+  <!-- Google Font: Lexend -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- SheetJS for .xlsx / .xls Spreadsheet Uploads -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+  <!-- React 18 & Babel Standalone (Runs JSX directly in browser on GitHub Pages) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="antialiased">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- SIMPLE INLINE SVG ICONS (ZERO EXTERNAL ICON DEPENDENCY) ---
+    const Icon = ({ children, className = "w-5 h-5" }) => (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+      >
+        {children}
+      </svg>
+    );
+
+    const Icons = {
+      ClipboardCheck: (p) => <Icon {...p}><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></Icon>,
+      CheckCircle2: (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></Icon>,
+      XCircle: (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></Icon>,
+      Lock: (p) => <Icon {...p}><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></Icon>,
+      Unlock: (p) => <Icon {...p}><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></Icon>,
+      Sun: (p) => <Icon {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></Icon>,
+      Moon: (p) => <Icon {...p}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></Icon>,
+      Users: (p) => <Icon {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></Icon>,
+      Award: (p) => <Icon {...p}><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></Icon>,
+      Settings: (p) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></Icon>,
+      Plus: (p) => <Icon {...p}><path d="M5 12h14"/><path d="M12 5v14"/></Icon>,
+      Trash2: (p) => <Icon {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></Icon>,
+      Save: (p) => <Icon {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></Icon>,
+      Calendar: (p) => <Icon {...p}><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></Icon>,
+      Search: (p) => <Icon {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Icon>,
+      ChevronRight: (p) => <Icon {...p}><path d="m9 18 6-6-6-6"/></Icon>,
+      ChevronLeft: (p) => <Icon {...p}><path d="m15 18-6-6 6-6"/></Icon>,
+      RotateCcw: (p) => <Icon {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></Icon>,
+      UserPlus: (p) => <Icon {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></Icon>,
+      ShieldCheck: (p) => <Icon {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></Icon>,
+      AlertTriangle: (p) => <Icon {...p}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></Icon>,
+      Check: (p) => <Icon {...p}><polyline points="20 6 9 17 4 12"/></Icon>,
+      X: (p) => <Icon {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Icon>,
+      Upload: (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></Icon>,
+      FileSpreadsheet: (p) => <Icon {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></Icon>,
+      Download: (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></Icon>,
+      RefreshCw: (p) => <Icon {...p}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></Icon>,
+      Eye: (p) => <Icon {...p}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></Icon>,
+      EyeOff: (p) => <Icon {...p}><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></Icon>,
+      Sliders: (p) => <Icon {...p}><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></Icon>,
+      Palette: (p) => <Icon {...p}><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></Icon>,
+      Type: (p) => <Icon {...p}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></Icon>,
+      Menu: (p) => <Icon {...p}><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></Icon>,
+      GraduationCap: (p) => <Icon {...p}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></Icon>,
+      BellOff: (p) => <Icon {...p}><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></Icon>
+    };
+
+    // --- INITIAL CLASSES DATA ---
+    const INITIAL_CLASSES = [
+      {
+        id: 'class-7b2',
+        name: '7b2',
+        pupils: [
+          { id: '7b2-1', no: 1, lastName: 'Ali', firstName: 'Bareera', tutorGroup: '' },
+          { id: '7b2-2', no: 2, lastName: 'Alli', firstName: 'Charles', tutorGroup: '' },
+          { id: '7b2-3', no: 3, lastName: 'Bint-Akhtar', firstName: 'Sumayyah', tutorGroup: '' },
+          { id: '7b2-4', no: 4, lastName: 'Carr-Clarke', firstName: 'Archie', tutorGroup: '' },
+          { id: '7b2-5', no: 5, lastName: 'Chatterley', firstName: 'Poppy', tutorGroup: '' },
+          { id: '7b2-6', no: 6, lastName: 'Chaudry', firstName: 'Mustafa', tutorGroup: '' },
+          { id: '7b2-7', no: 7, lastName: 'Choudhury', firstName: 'Zaynab', tutorGroup: '' },
+          { id: '7b2-8', no: 8, lastName: 'Darwish', firstName: 'Yasin', tutorGroup: '' },
+          { id: '7b2-9', no: 9, lastName: 'Donaghy', firstName: 'Blaine', tutorGroup: '' },
+          { id: '7b2-10', no: 10, lastName: 'Gull', firstName: 'Zahran', tutorGroup: '' },
+          { id: '7b2-11', no: 11, lastName: 'Haris', firstName: 'Meerab', tutorGroup: '' },
+          { id: '7b2-12', no: 12, lastName: 'Ikponmwosa', firstName: 'Jobeth', tutorGroup: '' },
+          { id: '7b2-13', no: 13, lastName: 'Islam', firstName: 'Suhana', tutorGroup: '' },
+          { id: '7b2-14', no: 14, lastName: 'Mia', firstName: 'Rahim', tutorGroup: '' },
+          { id: '7b2-15', no: 15, lastName: 'Mihai', firstName: 'Daiana', tutorGroup: '' },
+          { id: '7b2-16', no: 16, lastName: 'Mir', firstName: 'Furqan', tutorGroup: '' },
+          { id: '7b2-17', no: 17, lastName: 'Mutuga', firstName: 'Briella', tutorGroup: '' },
+          { id: '7b2-18', no: 18, lastName: 'Omirin', firstName: 'Rotimi', tutorGroup: '' },
+          { id: '7b2-19', no: 19, lastName: 'Oyesanmi', firstName: 'Rebecca', tutorGroup: '' },
+          { id: '7b2-20', no: 20, lastName: 'Rabindranath', firstName: 'Aagasthy', tutorGroup: '' },
+          { id: '7b2-21', no: 21, lastName: 'Rahman', firstName: 'Adyan', tutorGroup: '' },
+          { id: '7b2-22', no: 22, lastName: 'Ranjha', firstName: 'Omer', tutorGroup: '' },
+          { id: '7b2-23', no: 23, lastName: 'Sarioglu', firstName: 'Isla', tutorGroup: '' },
+          { id: '7b2-24', no: 24, lastName: 'Schofield', firstName: 'Robyn', tutorGroup: '' },
+          { id: '7b2-25', no: 25, lastName: 'Talukder', firstName: 'Zarif', tutorGroup: '' },
+          { id: '7b2-26', no: 26, lastName: 'Topping', firstName: 'Ava', tutorGroup: '' },
+          { id: '7b2-27', no: 27, lastName: 'Ubogu', firstName: 'Urhukpe', tutorGroup: '' },
+          { id: '7b2-28', no: 28, lastName: 'Zahid', firstName: 'Hooria', tutorGroup: '' },
+          { id: '7b2-29', no: 29, lastName: 'Zaki', firstName: 'Aroosh', tutorGroup: '' },
+          { id: '7b2-30', no: 30, lastName: 'Zazai', firstName: 'Marwa', tutorGroup: '' }
+        ],
+        homeworks: [
+          { id: 'hw-7b2-1', title: 'Home Learning 1', date: '2026-11-16', saved: false, completedIds: [] },
+          { id: 'hw-7b2-2', title: 'Home Learning 2', date: '2026-11-23', saved: false, completedIds: [] }
+        ]
+      },
+      {
+        id: 'class-8a3',
+        name: '8a3',
+        pupils: [
+          { id: '8a3-1', no: 1, lastName: 'Adil-Awan', firstName: 'Ahad', tutorGroup: '8SAH' },
+          { id: '8a3-2', no: 2, lastName: 'Ajmal', firstName: 'Safaa', tutorGroup: '8EWI' },
+          { id: '8a3-3', no: 3, lastName: 'Akinola', firstName: 'Beauty', tutorGroup: '8ABA' },
+          { id: '8a3-4', no: 4, lastName: 'Ali', firstName: 'Hassan', tutorGroup: '8EWI' },
+          { id: '8a3-5', no: 5, lastName: 'Begum', firstName: 'Halima', tutorGroup: '8RJO/WTR' },
+          { id: '8a3-6', no: 6, lastName: 'Begum', firstName: 'Tahmina', tutorGroup: '8HIG' },
+          { id: '8a3-7', no: 7, lastName: 'Chadderton', firstName: 'Alfie', tutorGroup: '8SAH' },
+          { id: '8a3-8', no: 8, lastName: 'Chung', firstName: 'Ophelia', tutorGroup: '8RJO/WTR' },
+          { id: '8a3-9', no: 9, lastName: 'Dabbagh', firstName: 'Hassan', tutorGroup: '8BHO' },
+          { id: '8a3-10', no: 10, lastName: 'Han', firstName: 'Meng Ting', tutorGroup: '8RJO/WTR' },
+          { id: '8a3-11', no: 11, lastName: 'Iqbal', firstName: 'Aiza', tutorGroup: '8SHA' },
+          { id: '8a3-12', no: 12, lastName: 'Islam', firstName: 'Haneefa', tutorGroup: '8RJO/WTR' },
+          { id: '8a3-13', no: 13, lastName: 'Khan', firstName: 'Saara', tutorGroup: '8EWI' },
+          { id: '8a3-14', no: 14, lastName: 'Mahnoor', firstName: 'Safa', tutorGroup: '8SAH' },
+          { id: '8a3-15', no: 15, lastName: 'Mehmood Hamid', firstName: 'Zanab', tutorGroup: '8NHA' },
+          { id: '8a3-16', no: 16, lastName: 'Mohamed', firstName: 'Ilham', tutorGroup: '8ABA' },
+          { id: '8a3-17', no: 17, lastName: 'Monsur', firstName: 'Meher', tutorGroup: '8NHA' },
+          { id: '8a3-18', no: 18, lastName: 'Mustafa', firstName: 'Sophia', tutorGroup: '8BHO' },
+          { id: '8a3-19', no: 19, lastName: 'Rivera', firstName: 'Maggie', tutorGroup: '8NHA' },
+          { id: '8a3-20', no: 20, lastName: 'Shabir', firstName: 'Aima', tutorGroup: '8ABA' },
+          { id: '8a3-21', no: 21, lastName: 'Sikander', firstName: 'Aiza', tutorGroup: '8BHO' },
+          { id: '8a3-22', no: 22, lastName: 'Suleman', firstName: 'Mutahhar', tutorGroup: '8SAH' },
+          { id: '8a3-23', no: 23, lastName: 'Ur Rehman', firstName: 'Haris', tutorGroup: '8NHA' },
+          { id: '8a3-24', no: 24, lastName: 'Waters', firstName: 'Emmy', tutorGroup: '8SHA' }
+        ],
+        homeworks: [
+          { id: 'hw-8a3-1', title: 'Home Learning 1', date: '2026-11-17', saved: false, completedIds: [] },
+          { id: 'hw-8a3-2', title: 'Home Learning 2', date: '2026-11-24', saved: false, completedIds: [] }
+        ]
+      },
+      {
+        id: 'class-8b4',
+        name: '8b4',
+        pupils: [
+          { id: '8b4-1', no: 1, lastName: 'Abdeen', firstName: 'Zain', tutorGroup: '8RBY/DPE' },
+          { id: '8b4-2', no: 2, lastName: 'Alabi-Ayinde', firstName: 'Kudirat', tutorGroup: '8NHA' },
+          { id: '8b4-3', no: 3, lastName: 'Ali', firstName: 'Shabnam', tutorGroup: '8EWI' },
+          { id: '8b4-4', no: 4, lastName: 'Ali', firstName: 'Zahrah', tutorGroup: '8RJO/WTR' },
+          { id: '8b4-5', no: 5, lastName: 'Aslam', firstName: 'Seher', tutorGroup: '8BHO' },
+          { id: '8b4-6', no: 6, lastName: 'Beyene Kidane', firstName: 'Surafel', tutorGroup: '8SHA' },
+          { id: '8b4-7', no: 7, lastName: 'Ceesay', firstName: 'Isatou', tutorGroup: '8SAH' },
+          { id: '8b4-8', no: 8, lastName: 'Cosgrove', firstName: 'Bobbie-May', tutorGroup: '8RBY/DPE' },
+          { id: '8b4-9', no: 9, lastName: 'Durkin', firstName: 'Lily', tutorGroup: '8RBY/DPE' },
+          { id: '8b4-10', no: 10, lastName: 'Durojaye', firstName: 'Annabelle', tutorGroup: '8RJO/WTR' },
+          { id: '8b4-11', no: 11, lastName: 'Edionseri', firstName: 'Eliora', tutorGroup: '8SAH' },
+          { id: '8b4-12', no: 12, lastName: 'Hill-Patel', firstName: 'Grayson', tutorGroup: '8NHA' },
+          { id: '8b4-13', no: 13, lastName: 'Imran', firstName: 'Amara', tutorGroup: '8ABA' },
+          { id: '8b4-14', no: 14, lastName: 'Khatun', firstName: 'Anisha', tutorGroup: '8ABA' },
+          { id: '8b4-15', no: 15, lastName: 'Kousar', firstName: 'Batshah', tutorGroup: '8NHA' },
+          { id: '8b4-16', no: 16, lastName: 'Nishat', firstName: 'Tasnia', tutorGroup: '8RBY/DPE' },
+          { id: '8b4-17', no: 17, lastName: 'Noor', firstName: 'Hifza', tutorGroup: '8ABA' },
+          { id: '8b4-18', no: 18, lastName: 'Noor', firstName: 'Inayah', tutorGroup: '8NHA' },
+          { id: '8b4-19', no: 19, lastName: 'Omer', firstName: 'Zakariya', tutorGroup: '8HIG' },
+          { id: '8b4-20', no: 20, lastName: 'Ramsey', firstName: 'Max', tutorGroup: '8HIG' },
+          { id: '8b4-21', no: 21, lastName: 'Rashid', firstName: 'Hashim', tutorGroup: '8SAH' },
+          { id: '8b4-22', no: 22, lastName: 'Raza', firstName: 'Ali', tutorGroup: '8SHA' },
+          { id: '8b4-23', no: 23, lastName: 'Salabanzi', firstName: 'Kamarley', tutorGroup: '8HIG' },
+          { id: '8b4-24', no: 24, lastName: 'Shamas', firstName: 'Halima', tutorGroup: '8HIG' },
+          { id: '8b4-25', no: 25, lastName: 'Siddique', firstName: 'Abu-Bakr', tutorGroup: '8BHO' }
+        ],
+        homeworks: [
+          {
+            id: 'hw-8b4-1',
+            title: 'Task 1 (21 Sept)',
+            date: '2026-09-21',
+            saved: true,
+            completedIds: [
+              '8b4-1', '8b4-2', '8b4-3', '8b4-4', '8b4-5', '8b4-6', '8b4-7', '8b4-8', '8b4-9', '8b4-10',
+              '8b4-11', '8b4-12', '8b4-13', '8b4-14', '8b4-15', '8b4-16', '8b4-18', '8b4-19', '8b4-20',
+              '8b4-21', '8b4-22', '8b4-23', '8b4-25'
+            ]
+          },
+          {
+            id: 'hw-8b4-2',
+            title: 'HL 2 (05 Oct)',
+            date: '2026-10-05',
+            saved: true,
+            completedIds: [
+              '8b4-1', '8b4-2', '8b4-3', '8b4-4', '8b4-5', '8b4-6', '8b4-7', '8b4-8', '8b4-9', '8b4-10',
+              '8b4-12', '8b4-13', '8b4-14', '8b4-16', '8b4-17', '8b4-19', '8b4-20', '8b4-21', '8b4-22', '8b4-23'
+            ]
+          },
+          {
+            id: 'hw-8b4-3',
+            title: 'HL 3 (14 Oct)',
+            date: '2026-10-14',
+            saved: true,
+            completedIds: [
+              '8b4-3', '8b4-4', '8b4-5', '8b4-6', '8b4-7', '8b4-8', '8b4-9', '8b4-10', '8b4-11', '8b4-12',
+              '8b4-14', '8b4-15', '8b4-16', '8b4-17', '8b4-18', '8b4-19', '8b4-20', '8b4-21', '8b4-22', '8b4-23', '8b4-25'
+            ]
+          },
+          {
+            id: 'hw-8b4-4',
+            title: 'Home Learning 4',
+            date: '2026-11-18',
+            saved: false,
+            completedIds: []
+          }
+        ]
+      },
+      {
+        id: 'class-9a1',
+        name: '9a1',
+        pupils: [
+          { id: '9a1-1', no: 1, lastName: 'Adebayo', firstName: 'Anu-Oluwapo Mabel', tutorGroup: '9ERO' },
+          { id: '9a1-2', no: 2, lastName: 'Adnan', firstName: 'Ibaad', tutorGroup: '9LGD' },
+          { id: '9a1-3', no: 3, lastName: 'Afolabi', firstName: 'Semilore', tutorGroup: '9PMA' },
+          { id: '9a1-4', no: 4, lastName: 'Ahmed', firstName: 'Khadijah', tutorGroup: '9LGD' },
+          { id: '9a1-5', no: 5, lastName: 'Ahsan', firstName: 'Muhammad', tutorGroup: '9JMO' },
+          { id: '9a1-6', no: 6, lastName: 'Ali', firstName: 'Shayaan', tutorGroup: '9JMO' },
+          { id: '9a1-7', no: 7, lastName: 'Ali', firstName: 'Tayiba', tutorGroup: '9CDE' },
+          { id: '9a1-8', no: 8, lastName: 'Arbey', firstName: 'Amara', tutorGroup: '9PMA' },
+          { id: '9a1-9', no: 9, lastName: 'Aslam', firstName: 'Umm-E-Habiba', tutorGroup: '9PMA' },
+          { id: '9a1-10', no: 10, lastName: 'Atkinson', firstName: 'Lewis', tutorGroup: '9JBA' },
+          { id: '9a1-11', no: 11, lastName: 'Chowdhury', firstName: 'Yasin', tutorGroup: '9JBA' },
+          { id: '9a1-12', no: 12, lastName: 'Debnath', firstName: 'Debarshi', tutorGroup: '9SMC' },
+          { id: '9a1-13', no: 13, lastName: 'Dosunmu', firstName: 'Eniade', tutorGroup: '9LLE/SHZ' },
+          { id: '9a1-14', no: 14, lastName: 'Heywood', firstName: 'Ryan', tutorGroup: '9JBA' },
+          { id: '9a1-15', no: 15, lastName: 'Hussain', firstName: 'Hammad', tutorGroup: '9SMC' },
+          { id: '9a1-16', no: 16, lastName: 'Ibrahim', firstName: 'Yameen', tutorGroup: '9PMA' },
+          { id: '9a1-17', no: 17, lastName: 'Islam', firstName: 'Mohammed Arman', tutorGroup: '9ERO' },
+          { id: '9a1-18', no: 18, lastName: 'Jinu', firstName: 'Alana', tutorGroup: '9LLE/SHZ' },
+          { id: '9a1-19', no: 19, lastName: 'Lees', firstName: 'Jakobe', tutorGroup: '9JMO' },
+          { id: '9a1-20', no: 20, lastName: 'Mccormick', firstName: 'Eric', tutorGroup: '9CDE' },
+          { id: '9a1-21', no: 21, lastName: 'Mehmood', firstName: 'Ismail', tutorGroup: '9LGD' },
+          { id: '9a1-22', no: 22, lastName: 'Miah', firstName: 'Mikayeel Mustafa', tutorGroup: '9LGD' },
+          { id: '9a1-23', no: 23, lastName: 'Nazir', firstName: 'Areeba', tutorGroup: '9PMA' },
+          { id: '9a1-24', no: 24, lastName: 'Noor', firstName: 'Azha', tutorGroup: '9CDE' },
+          { id: '9a1-25', no: 25, lastName: 'Ogbeide', firstName: 'Elliot', tutorGroup: '9PMA' },
+          { id: '9a1-26', no: 26, lastName: 'Okoli', firstName: 'Lilian', tutorGroup: '9JMO' },
+          { id: '9a1-27', no: 27, lastName: 'Rani', firstName: 'Tayyaba', tutorGroup: '9SMC' },
+          { id: '9a1-28', no: 28, lastName: 'Tehleel', firstName: 'Ahmad', tutorGroup: '9JBA' },
+          { id: '9a1-29', no: 29, lastName: 'Thomas Sony', firstName: 'David', tutorGroup: '9CDE' },
+          { id: '9a1-30', no: 30, lastName: 'Zak', firstName: 'Jan', tutorGroup: '9SMC' }
+        ],
+        homeworks: [
+          { id: 'hw-9a1-1', title: 'Home Learning 1', date: '2026-11-19', saved: false, completedIds: [] },
+          { id: 'hw-9a1-2', title: 'Home Learning 2', date: '2026-12-03', saved: false, completedIds: [] }
+        ]
+      },
+      {
+        id: 'class-9b2',
+        name: '9b2',
+        pupils: [
+          { id: '9b2-1', no: 1, lastName: 'Abbas', firstName: 'Aniqa', tutorGroup: '9BMA/NCA' },
+          { id: '9b2-2', no: 2, lastName: 'Adeyemo', firstName: 'Kenny', tutorGroup: '9ERO' },
+          { id: '9b2-3', no: 3, lastName: 'Aghaunor', firstName: 'Zina', tutorGroup: '9PMA' },
+          { id: '9b2-4', no: 4, lastName: 'Azam', firstName: 'Abdullah', tutorGroup: '9LLE/SHZ' },
+          { id: '9b2-5', no: 5, lastName: 'Bivol', firstName: 'Irina', tutorGroup: '9CDE' },
+          { id: '9b2-6', no: 6, lastName: 'Boucher', firstName: 'Jessiah', tutorGroup: '9SMC' },
+          { id: '9b2-7', no: 7, lastName: 'Choudhury', firstName: 'Mohammed Thaeemul', tutorGroup: '9SMC' },
+          { id: '9b2-8', no: 8, lastName: 'Eajaz', firstName: 'Aaban', tutorGroup: '9CDE' },
+          { id: '9b2-9', no: 9, lastName: 'Ferriss', firstName: 'Greyson', tutorGroup: '9SMC' },
+          { id: '9b2-10', no: 10, lastName: 'Hameed Bashir', firstName: 'Muhammad Yahya', tutorGroup: '9BMA/NCA' },
+          { id: '9b2-11', no: 11, lastName: 'Hassan', firstName: 'Ali', tutorGroup: '9SMC' },
+          { id: '9b2-12', no: 12, lastName: 'Inayah', firstName: 'Afseen', tutorGroup: '9ERO' },
+          { id: '9b2-13', no: 13, lastName: 'Iro', firstName: 'Zoey', tutorGroup: '9PMA' },
+          { id: '9b2-14', no: 14, lastName: 'Jaffri', firstName: 'Ayaanah', tutorGroup: '9CDE' },
+          { id: '9b2-15', no: 15, lastName: 'Khatun', firstName: 'Khadija', tutorGroup: '9JMO' },
+          { id: '9b2-16', no: 16, lastName: 'Khokhar', firstName: 'Yusuf', tutorGroup: '9BMA/NCA' },
+          { id: '9b2-17', no: 17, lastName: 'Latif', firstName: 'Aminah', tutorGroup: '9JMO' },
+          { id: '9b2-18', no: 18, lastName: 'MacFarlane', firstName: 'Harley', tutorGroup: '9ERO' },
+          { id: '9b2-19', no: 19, lastName: 'Miah', firstName: 'Alyssa Eliyah', tutorGroup: '9BMA/NCA' },
+          { id: '9b2-20', no: 20, lastName: 'Millett', firstName: 'Emilie', tutorGroup: '9BMA/NCA' },
+          { id: '9b2-21', no: 21, lastName: 'Naz', firstName: 'Haajra Noor', tutorGroup: '9SMC' },
+          { id: '9b2-22', no: 22, lastName: 'Needham', firstName: 'Lucas', tutorGroup: '9LGD' },
+          { id: '9b2-23', no: 23, lastName: 'Obaro', firstName: 'Jonathan', tutorGroup: '9JBA' },
+          { id: '9b2-24', no: 24, lastName: 'Perrin', firstName: 'Beth', tutorGroup: '9ERO' },
+          { id: '9b2-25', no: 25, lastName: 'Pinzariu', firstName: 'Dominic', tutorGroup: '9BMA/NCA' },
+          { id: '9b2-26', no: 26, lastName: 'Rashid', firstName: 'Umaiza', tutorGroup: '9LGD' },
+          { id: '9b2-27', no: 27, lastName: 'Sarder', firstName: 'Nahin', tutorGroup: '9BMA/NCA' },
+          { id: '9b2-28', no: 28, lastName: 'Thwaites', firstName: 'Daniel', tutorGroup: '9ERO' },
+          { id: '9b2-29', no: 29, lastName: 'Tuz Zahra', firstName: 'Fatima', tutorGroup: '9LLE/SHZ' },
+          { id: '9b2-30', no: 30, lastName: 'Zeb', firstName: 'Safiyyah', tutorGroup: '9ERO' },
+          { id: '9b2-31', no: 31, lastName: 'Zeeshan', firstName: 'Zain', tutorGroup: '9SMC' }
+        ],
+        homeworks: [
+          { id: 'hw-9b2-1', title: 'Home Learning 1', date: '2026-11-20', saved: false, completedIds: [] },
+          { id: 'hw-9b2-2', title: 'Home Learning 2', date: '2026-12-04', saved: false, completedIds: [] }
+        ]
+      },
+      {
+        id: 'class-9ATe',
+        name: '9ATe',
+        pupils: [
+          { id: '9ate-1', no: 1, lastName: 'Ahmed', firstName: 'Yameen', tutorGroup: '9LLE/SHZ' },
+          { id: '9ate-2', no: 2, lastName: 'Ahsan', firstName: 'Muhammad', tutorGroup: '9JMO' },
+          { id: '9ate-3', no: 3, lastName: 'Ali', firstName: 'Zakariyya', tutorGroup: '9PMA' },
+          { id: '9ate-4', no: 4, lastName: 'Ashraf', firstName: 'Aamirah', tutorGroup: '9LGD' },
+          { id: '9ate-5', no: 5, lastName: 'Aslam', firstName: 'Umm-E-Habiba', tutorGroup: '9PMA' },
+          { id: '9ate-6', no: 6, lastName: 'Bashir', firstName: 'Sufyan', tutorGroup: '9CDE' },
+          { id: '9ate-7', no: 7, lastName: 'Debnath', firstName: 'Debarshi', tutorGroup: '9SMC' },
+          { id: '9ate-8', no: 8, lastName: 'Gardener', firstName: 'Eden', tutorGroup: '9JMO' },
+          { id: '9ate-9', no: 9, lastName: 'Harvey', firstName: 'Sabrina', tutorGroup: '9JMO' },
+          { id: '9ate-10', no: 10, lastName: 'Hashmi', firstName: 'Ismail', tutorGroup: '9JMO' },
+          { id: '9ate-11', no: 11, lastName: 'Ibrahim', firstName: 'Yameen', tutorGroup: '9PMA' },
+          { id: '9ate-12', no: 12, lastName: 'Islam', firstName: 'Mohammed Arman', tutorGroup: '9ERO' },
+          { id: '9ate-13', no: 13, lastName: 'Mahmood', firstName: 'Mohammed Saif', tutorGroup: '9ERO' },
+          { id: '9ate-14', no: 14, lastName: 'Miah', firstName: 'Mikayeel Mustafa', tutorGroup: '9LGD' },
+          { id: '9ate-15', no: 15, lastName: 'Odedeji', firstName: 'Peculiar', tutorGroup: '9LGD' },
+          { id: '9ate-16', no: 16, lastName: 'Parker', firstName: 'Cassidy', tutorGroup: '9LGD' },
+          { id: '9ate-17', no: 17, lastName: 'Rahman', firstName: 'Afreen', tutorGroup: '9CDE' }
+        ],
+        homeworks: [
+          { id: 'hw-9ate-1', title: 'Home Learning 1', date: '2026-11-25', saved: false, completedIds: [] }
+        ]
+      },
+      {
+        id: 'class-10x2',
+        name: '10x2',
+        pupils: [
+          { id: '10x2-1', no: 1, lastName: 'Afzaal', firstName: 'Jannat', tutorGroup: '10CWI' },
+          { id: '10x2-2', no: 2, lastName: 'Ahmed', firstName: 'Hafsah', tutorGroup: '10LHO' },
+          { id: '10x2-3', no: 3, lastName: 'Ahmed', firstName: 'Ijtiba', tutorGroup: '10LHO' },
+          { id: '10x2-4', no: 4, lastName: 'Akhtar', firstName: 'Aliza', tutorGroup: '10LMC' },
+          { id: '10x2-5', no: 5, lastName: 'Akhtar', firstName: 'Faizaan', tutorGroup: '10AHA' },
+          { id: '10x2-6', no: 6, lastName: 'Ali', firstName: 'Laibah', tutorGroup: '10EDE/KLU' },
+          { id: '10x2-7', no: 7, lastName: 'Armstrong', firstName: 'Tyler', tutorGroup: '10AHA' },
+          { id: '10x2-8', no: 8, lastName: 'Awolesi', firstName: 'Claudia', tutorGroup: '10LHO' },
+          { id: '10x2-9', no: 9, lastName: 'Bergin', firstName: 'Autumn', tutorGroup: '10MAL' },
+          { id: '10x2-10', no: 10, lastName: 'Chowdhury', firstName: 'Mariam', tutorGroup: '10EDE/KLU' },
+          { id: '10x2-11', no: 11, lastName: 'Ellahi', firstName: 'Sameen', tutorGroup: '10AHA' },
+          { id: '10x2-12', no: 12, lastName: 'Hussain', firstName: 'Anniyah', tutorGroup: '10RMA/ABL' },
+          { id: '10x2-13', no: 13, lastName: 'Hussain', firstName: 'Hafsa', tutorGroup: '10RMA/ABL' },
+          { id: '10x2-14', no: 14, lastName: 'Imran', firstName: 'Inayah', tutorGroup: '10EDE/KLU' },
+          { id: '10x2-15', no: 15, lastName: 'Islam', firstName: 'Ibrahim', tutorGroup: '10AHA' },
+          { id: '10x2-16', no: 16, lastName: 'Javed', firstName: 'Aysha', tutorGroup: '10HRI' },
+          { id: '10x2-17', no: 17, lastName: 'Jenner', firstName: 'Delilah', tutorGroup: '10LHO' },
+          { id: '10x2-18', no: 18, lastName: 'Jilani', firstName: 'Shahjalal', tutorGroup: '10LMC' },
+          { id: '10x2-19', no: 19, lastName: 'Lam', firstName: 'Erin', tutorGroup: '10AHA' },
+          { id: '10x2-20', no: 20, lastName: 'Mahmood', firstName: 'Nureen', tutorGroup: '10RMA/ABL' },
+          { id: '10x2-21', no: 21, lastName: 'Mayberry-Walker', firstName: 'Evie', tutorGroup: '10HRI' },
+          { id: '10x2-22', no: 22, lastName: 'Naeem', firstName: 'Najeeha', tutorGroup: '10LMC' },
+          { id: '10x2-23', no: 23, lastName: 'Oladipupo', firstName: 'Abdul Malik', tutorGroup: '10MAL' },
+          { id: '10x2-24', no: 24, lastName: 'Sadiq', firstName: 'Azaan', tutorGroup: '10EDE/KLU' },
+          { id: '10x2-25', no: 25, lastName: 'Saqib', firstName: 'Haadin', tutorGroup: '10EDE/KLU' },
+          { id: '10x2-26', no: 26, lastName: 'Sibanda', firstName: 'Leanne', tutorGroup: '10AHA' },
+          { id: '10x2-27', no: 27, lastName: 'Visram', firstName: 'Sianna', tutorGroup: '10HRI' },
+          { id: '10x2-28', no: 28, lastName: 'Wajid', firstName: 'Hibah', tutorGroup: '10AHA' },
+          { id: '10x2-29', no: 29, lastName: 'Yaaseen', firstName: 'Adam', tutorGroup: '10MAL' }
+        ],
+        homeworks: [
+          { id: 'hw-10x2-1', title: 'Atomic Structure Revision', date: '2026-11-26', saved: false, completedIds: [] },
+          { id: 'hw-10x2-2', title: 'GCSE Practice Questions', date: '2026-12-10', saved: false, completedIds: [] }
+        ]
+      },
+      {
+        id: 'class-11rev',
+        name: '11 Revision',
+        pupils: [
+          { id: '11r-1', no: 1, lastName: 'Yassin', firstName: 'Ibrahim', tutorGroup: 'Yr 11' },
+          { id: '11r-2', no: 2, lastName: 'Yasin', firstName: 'Safa', tutorGroup: 'Yr 11' },
+          { id: '11r-3', no: 3, lastName: 'Chowdury', firstName: 'Zahra', tutorGroup: 'Yr 11' },
+          { id: '11r-4', no: 4, lastName: 'Yu', firstName: 'Samantha', tutorGroup: 'Yr 11' },
+          { id: '11r-5', no: 5, lastName: 'Quadir', firstName: 'Anaya', tutorGroup: 'Yr 11' },
+          { id: '11r-6', no: 6, lastName: 'Subhani', firstName: 'Hafsa', tutorGroup: 'Yr 11' },
+          { id: '11r-7', no: 7, lastName: 'Obamedo', firstName: 'Vincent', tutorGroup: 'Yr 11' },
+          { id: '11r-8', no: 8, lastName: 'Ahmed', firstName: 'Isa', tutorGroup: 'Yr 11' },
+          { id: '11r-9', no: 9, lastName: 'Zeeshan', firstName: 'Haider', tutorGroup: 'Yr 11' },
+          { id: '11r-10', no: 10, lastName: 'Heshmatpour', firstName: 'Pouya', tutorGroup: 'Yr 11' }
+        ],
+        homeworks: [
+          { id: 'hw-11r-1', title: 'Session 28 Sept', date: '2026-09-28', saved: true, completedIds: ['11r-1', '11r-2', '11r-3'] },
+          { id: 'hw-11r-2', title: 'Session 05 Oct', date: '2026-10-05', saved: true, completedIds: ['11r-4', '11r-5', '11r-6', '11r-7', '11r-8', '11r-9', '11r-10'] },
+          { id: 'hw-11r-3', title: 'Session 16 Nov', date: '2026-11-16', saved: false, completedIds: [] }
+        ]
+      }
+    ];
+
+    const INITIAL_TESTS = [
+      { id: 'test-init-1', title: 'Year 8 Half-Term Assessment', date: '2026-11-26', classIds: ['class-8a3', 'class-8b4'], noHomeworkWeek: true },
+      { id: 'test-init-2', title: 'Yr 10 Physics Checkpoint', date: '2026-12-03', classIds: ['class-10x2'], noHomeworkWeek: true }
+    ];
+
+    const FOUR_WEEKS_MS = 28 * 24 * 60 * 60 * 1000;
+    const DEFAULT_PASSWORD = 'prof2026';
+
+    const FONT_OPTIONS = [
+      { id: 'system', name: 'System Sans', desc: 'Standard crisp classroom font', family: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+      { id: 'lexend', name: 'Lexend (Reading Fluency)', desc: 'Designed to reduce visual crowding', family: '"Lexend", ui-sans-serif, system-ui, sans-serif' },
+      { id: 'comic', name: 'Comic / Classroom', desc: 'Distinct single-storey letters for easy reading', family: '"Comic Sans MS", "Chalkboard SE", cursive, sans-serif' },
+      { id: 'serif', name: 'Classic Serif', desc: 'Traditional book-style serif typography', family: 'Georgia, Cambria, "Times New Roman", Times, serif' }
+    ];
+
+    const COLOUR_FILTERS = [
+      { id: 'none', name: 'None (Default)', overlay: 'transparent', contrast: 'none' },
+      { id: 'sepia', name: 'Warm Sepia', overlay: 'rgba(245, 222, 179, 0.24)', contrast: 'sepia(0.18)' },
+      { id: 'cream', name: 'Pastel Cream', overlay: 'rgba(255, 253, 208, 0.28)', contrast: 'none' },
+      { id: 'yellow', name: 'Soft Yellow (Irlen)', overlay: 'rgba(254, 240, 138, 0.24)', contrast: 'none' },
+      { id: 'blue', name: 'Calming Blue (Irlen)', overlay: 'rgba(186, 230, 253, 0.24)', contrast: 'none' },
+      { id: 'rose', name: 'Soft Rose (Irlen)', overlay: 'rgba(254, 205, 211, 0.22)', contrast: 'none' },
+      { id: 'mint', name: 'Sage Green (Irlen)', overlay: 'rgba(187, 247, 208, 0.20)', contrast: 'none' },
+      { id: 'high-contrast', name: 'High Contrast', overlay: 'transparent', contrast: 'contrast(1.22) saturate(1.15)' }
+    ];
+
+    const CB_PALETTES = [
+      { id: 'standard', name: 'Standard (Green / Amber / Red)', desc: 'Classic school traffic-light indicators' },
+      { id: 'okabe-ito', name: 'Okabe-Ito Colour-Blind Safe', desc: 'High-contrast Blue / Amber / Vermilion + Shapes' },
+      { id: 'deuteranopia', name: 'Deuteranopia / Protanopia Safe', desc: 'Red-green colour blindness safe + Shapes' },
+      { id: 'tritanopia', name: 'Tritanopia Safe', desc: 'Blue-yellow colour blindness safe + Shapes' }
+    ];
+
+    const DEFAULT_A11Y = { font: 'system', fontSize: 'normal', dyslexicSpacing: false, colourFilter: 'none', colourBlindMode: 'standard' };
+
+    const CLASS_BADGE_COLORS = [
+      { pill: 'bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/50 dark:text-indigo-200 dark:border-indigo-700', dot: 'bg-indigo-500' },
+      { pill: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700', dot: 'bg-emerald-500' },
+      { pill: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700', dot: 'bg-amber-500' },
+      { pill: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/50 dark:text-rose-200 dark:border-rose-700', dot: 'bg-rose-500' },
+      { pill: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/50 dark:text-sky-200 dark:border-sky-700', dot: 'bg-sky-500' },
+      { pill: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/50 dark:text-purple-200 dark:border-purple-700', dot: 'bg-purple-500' },
+      { pill: 'bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-900/50 dark:text-teal-200 dark:border-teal-700', dot: 'bg-teal-500' },
+      { pill: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700', dot: 'bg-orange-500' }
+    ];
+
+    function formatDateUK(isoStr) {
+      if (!isoStr) return '';
+      const parts = isoStr.split('-');
+      return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : isoStr;
+    }
+
+    function formatShortDateUK(isoStr) {
+      if (!isoStr) return '';
+      const d = new Date(isoStr + 'T00:00:00');
+      if (Number.isNaN(d.getTime())) return isoStr;
+      return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+
+    function getTodayISO() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+
+    function addDaysISO(isoStr, days) {
+      const d = new Date(isoStr + 'T00:00:00');
+      d.setDate(d.getDate() + days);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function diffDays(fromISO, toISO) {
+      const a = new Date(fromISO + 'T00:00:00');
+      const b = new Date(toISO + 'T00:00:00');
+      return Math.round((b - a) / (24 * 60 * 60 * 1000));
+    }
+
+    function getWeekBoundsISO(isoStr) {
+      const d = new Date(isoStr + 'T00:00:00');
+      if (Number.isNaN(d.getTime())) return { start: isoStr, end: isoStr };
+      const dayOfWeek = (d.getDay() + 6) % 7;
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - dayOfWeek);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      return { start: fmt(monday), end: fmt(sunday) };
+    }
+
+    function isDateInSameWeek(dateA, dateB) {
+      if (!dateA || !dateB) return false;
+      const boundsA = getWeekBoundsISO(dateA);
+      return dateB >= boundsA.start && dateB <= boundsA.end;
+    }
+
+    function getStatusStyles(cbMode) {
+      if (cbMode === 'okabe-ito' || cbMode === 'deuteranopia') {
+        return {
+          isCB: true,
+          grade3: { badgeBg: 'bg-sky-600 text-white border-sky-700', softBg: 'bg-sky-100/90 dark:bg-sky-900/40 text-sky-900 dark:text-sky-200 border-sky-400 dark:border-sky-600', cardDone: 'bg-sky-600 text-white border-sky-500 shadow-lg shadow-sky-600/20', symbol: '●' },
+          grade2: { badgeBg: 'bg-amber-500 text-slate-950 border-amber-600', softBg: 'bg-amber-100/90 dark:bg-amber-900/40 text-amber-950 dark:text-amber-200 border-amber-400 dark:border-amber-600', symbol: '▲' },
+          grade1: { badgeBg: 'bg-orange-600 text-white border-orange-700', softBg: 'bg-orange-100/90 dark:bg-orange-950/50 text-orange-950 dark:text-orange-200 border-orange-500 dark:border-orange-600', cardMissed: 'bg-orange-700 text-white border-orange-500 shadow-lg shadow-orange-700/25', symbol: '◆' }
+        };
+      }
+      if (cbMode === 'tritanopia') {
+        return {
+          isCB: true,
+          grade3: { badgeBg: 'bg-teal-600 text-white border-teal-700', softBg: 'bg-teal-100/90 dark:bg-teal-900/40 text-teal-950 dark:text-teal-200 border-teal-400 dark:border-teal-600', cardDone: 'bg-teal-600 text-white border-teal-500 shadow-lg shadow-teal-600/20', symbol: '●' },
+          grade2: { badgeBg: 'bg-amber-400 text-slate-950 border-amber-500', softBg: 'bg-amber-100/90 dark:bg-amber-900/40 text-amber-950 dark:text-amber-200 border-amber-400 dark:border-amber-600', symbol: '▲' },
+          grade1: { badgeBg: 'bg-fuchsia-700 text-white border-fuchsia-800', softBg: 'bg-fuchsia-100/90 dark:bg-fuchsia-950/50 text-fuchsia-950 dark:text-fuchsia-200 border-fuchsia-500 dark:border-fuchsia-600', cardMissed: 'bg-fuchsia-700 text-white border-fuchsia-500 shadow-lg shadow-fuchsia-700/25', symbol: '◆' }
+        };
+      }
+      return {
+        isCB: false,
+        grade3: { badgeBg: 'bg-emerald-600 text-white border-emerald-700', softBg: 'bg-emerald-100/80 dark:bg-emerald-900/40 text-emerald-900 dark:text-emerald-200 border-emerald-400 dark:border-emerald-700', cardDone: 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-600/20', symbol: '✓' },
+        grade2: { badgeBg: 'bg-amber-400 text-slate-950 border-amber-500', softBg: 'bg-amber-100/80 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 border-amber-400 dark:border-amber-700', symbol: '•' },
+        grade1: { badgeBg: 'bg-rose-600 text-white border-rose-700', softBg: 'bg-rose-100/80 dark:bg-rose-900/40 text-rose-900 dark:text-rose-200 border-rose-400 dark:border-rose-700', cardMissed: 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-600/25', symbol: '✗' }
+      };
+    }
+
+    function calculateHalfTermGrade(pupilId, savedHomeworks, cbMode = 'standard') {
+      const styles = getStatusStyles(cbMode);
+      const total = savedHomeworks.length;
+      if (total === 0) {
+        return {
+          grade: null, label: 'No Data', completed: 0, missed: 0, total: 0, percentage: 100,
+          badgeBg: 'bg-[#e9e1d2] text-[#5e5243] dark:bg-slate-800 dark:text-slate-300 border-[#d6cbb7] dark:border-slate-700',
+          softBg: 'bg-[#f5efe4] text-[#5e5243] dark:bg-slate-800/60 dark:text-slate-300 border-[#ddd3c0] dark:border-slate-700',
+          symbol: '—'
+        };
+      }
+      let completed = 0;
+      savedHomeworks.forEach((hw) => { if (hw.completedIds.includes(pupilId)) completed += 1; });
+      const missed = total - completed;
+      const percentage = Math.round((completed / total) * 100);
+
+      if (missed >= 3 || percentage < 50) {
+        return { grade: 1, label: 'Concern', completed, missed, total, percentage, badgeBg: styles.grade1.badgeBg, softBg: styles.grade1.softBg, symbol: styles.grade1.symbol };
+      }
+      if (percentage >= 80) {
+        return { grade: 3, label: 'Excellent', completed, missed, total, percentage, badgeBg: styles.grade3.badgeBg, softBg: styles.grade3.softBg, symbol: styles.grade3.symbol };
+      }
+      return { grade: 2, label: 'Good', completed, missed, total, percentage, badgeBg: styles.grade2.badgeBg, softBg: styles.grade2.softBg, symbol: styles.grade2.symbol };
+    }
+
+    function parseSheetRowsToClass(sheetName, rows, importTasks = true) {
+      const cleanName = sheetName
+        .replace(/^di[aá]rio\s+de\s+classe\s*[-–:]\s*/i, '')
+        .replace(/^class\s*[-–:]\s*/i, '')
+        .trim() || 'Imported Class';
+
+      let headerIdx = -1, colNo = -1, colLast = -1, colFirst = -1, colTutor = -1;
+      for (let r = 0; r < Math.min(rows.length, 15); r++) {
+        const row = rows[r] || [];
+        for (let c = 0; c < row.length; c++) {
+          const cell = String(row[c] ?? '').trim().toLowerCase();
+          if (cell === 'last name' || cell === 'surname' || cell === 'sobrenome') colLast = c;
+          if (cell === 'first name' || cell === 'forename' || cell === 'nome') colFirst = c;
+          if (cell === 'no.' || cell === 'no' || cell === '#' || cell === 'roll') colNo = c;
+          if (cell === 'tutor group' || cell === 'tutor' || cell === 'form' || cell === 'reg') colTutor = c;
+        }
+        if (colLast !== -1 || colFirst !== -1) { headerIdx = r; break; }
+      }
+
+      if (headerIdx === -1) {
+        const pupils = [];
+        rows.forEach((row, idx) => {
+          const nonEmpty = (row || []).map((v) => String(v ?? '').trim()).filter(Boolean);
+          if (nonEmpty.length === 0) return;
+          if (nonEmpty.length === 1) {
+            const parts = nonEmpty[0].split(/\s+/);
+            pupils.push({ id: `imp-${Date.now()}-${idx}`, no: pupils.length + 1, firstName: parts[0] || 'Pupil', lastName: parts.slice(1).join(' ') || '', tutorGroup: '' });
+          } else {
+            pupils.push({ id: `imp-${Date.now()}-${idx}`, no: pupils.length + 1, lastName: nonEmpty[0], firstName: nonEmpty[1], tutorGroup: nonEmpty[2] || '' });
+          }
+        });
+        return {
+          id: `class-${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Math.random().toString(36).slice(2, 5)}`,
+          name: cleanName,
+          pupils,
+          homeworks: [{ id: `hw-${Date.now()}-1`, title: 'Home Learning 1', date: getTodayISO(), saved: false, completedIds: [] }]
+        };
+      }
+
+      const headerRow = rows[headerIdx] || [];
+      const nextRow = rows[headerIdx + 1] || [];
+      const hasDateSubRow = nextRow.some((v) => String(v ?? '').trim().toLowerCase() === 'date');
+      const dataStartIdx = hasDateSubRow ? headerIdx + 2 : headerIdx + 1;
+
+      const taskCols = [];
+      if (importTasks) {
+        const startTaskCol = Math.max(colNo, colLast, colFirst, colTutor) + 1;
+        for (let c = startTaskCol; c < Math.max(headerRow.length, nextRow.length); c++) {
+          const hTitle = String(headerRow[c] ?? '').trim();
+          const dLabel = hasDateSubRow ? String(nextRow[c] ?? '').trim() : '';
+          if (hTitle || dLabel) {
+            taskCols.push({ colIndex: c, title: hTitle && dLabel ? `${hTitle} (${dLabel})` : hTitle || `Task (${dLabel})`, rawDate: dLabel });
+          }
+        }
+      }
+
+      const pupils = [];
+      const taskCompletionMap = {};
+      taskCols.forEach((tc) => { taskCompletionMap[tc.colIndex] = []; });
+
+      for (let r = dataStartIdx; r < rows.length; r++) {
+        const row = rows[r] || [];
+        const lastName = colLast !== -1 ? String(row[colLast] ?? '').trim() : '';
+        const firstName = colFirst !== -1 ? String(row[colFirst] ?? '').trim() : '';
+        const tutorGroup = colTutor !== -1 ? String(row[colTutor] ?? '').trim() : '';
+        const rawNo = colNo !== -1 ? parseInt(String(row[colNo] ?? '').trim(), 10) : NaN;
+        if (!lastName && !firstName) continue;
+
+        const pupilId = `imp-${cleanName.replace(/\s+/g, '')}-${pupils.length + 1}-${Math.random().toString(36).slice(2, 5)}`;
+        pupils.push({ id: pupilId, no: Number.isNaN(rawNo) ? pupils.length + 1 : rawNo, lastName: lastName || 'Surname', firstName: firstName || 'Forename', tutorGroup });
+
+        taskCols.forEach((tc) => {
+          const val = String(row[tc.colIndex] ?? '').trim().toLowerCase();
+          const isMissed = val === 'n' || val === 'no' || val === 'x' || val === '0' || val.startsWith('b');
+          if (!isMissed) taskCompletionMap[tc.colIndex].push(pupilId);
+        });
+      }
+
+      const homeworks = taskCols.map((tc, idx) => ({
+        id: `hw-imp-${Date.now()}-${idx}`,
+        title: tc.title,
+        date: getTodayISO(),
+        saved: true,
+        completedIds: taskCompletionMap[tc.colIndex]
+      }));
+
+      if (homeworks.length === 0) {
+        homeworks.push({ id: `hw-${Date.now()}-1`, title: 'Home Learning 1', date: getTodayISO(), saved: false, completedIds: [] });
+      }
+
+      return {
+        id: `class-${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Math.random().toString(36).slice(2, 5)}`,
+        name: cleanName,
+        pupils,
+        homeworks
+      };
+    }
+
+    function App() {
+      const [savedPassword, setSavedPassword] = useState(() => localStorage.getItem('hw_tracker_password') || DEFAULT_PASSWORD);
+      const [unlockedUntil, setUnlockedUntil] = useState(() => Number(localStorage.getItem('hw_tracker_unlocked_until') || 0));
+      const [passwordInput, setPasswordInput] = useState('');
+      const [loginError, setLoginError] = useState('');
+      const [isUnlocked, setIsUnlocked] = useState(() => Date.now() < Number(localStorage.getItem('hw_tracker_unlocked_until') || 0));
+
+      const [darkMode, setDarkMode] = useState(() => localStorage.getItem('hw_tracker_theme') === 'dark');
+      const [a11y, setA11y] = useState(() => {
+        try {
+          const s = localStorage.getItem('hw_tracker_a11y');
+          return s ? { ...DEFAULT_A11Y, ...JSON.parse(s) } : DEFAULT_A11Y;
+        } catch { return DEFAULT_A11Y; }
+      });
+
+      const [classes, setClasses] = useState(() => {
+        try {
+          const s = localStorage.getItem('hw_tracker_classes_v3');
+          return s ? JSON.parse(s) : INITIAL_CLASSES;
+        } catch { return INITIAL_CLASSES; }
+      });
+
+      const [tests, setTests] = useState(() => {
+        try {
+          const s = localStorage.getItem('hw_tracker_tests_v1');
+          return s ? JSON.parse(s) : INITIAL_TESTS;
+        } catch { return INITIAL_TESTS; }
+      });
+
+      const [selectedClassId, setSelectedClassId] = useState(() => localStorage.getItem('hw_tracker_selected_class') || 'class-8b4');
+      const [activeTab, setActiveTab] = useState('check');
+      const [selectedHomeworkId, setSelectedHomeworkId] = useState('');
+      const [searchQuery, setSearchQuery] = useState('');
+
+      const [menuOpen, setMenuOpen] = useState(false);
+      const menuRef = useRef(null);
+
+      const todayISO = getTodayISO();
+      const [calendarMonth, setCalendarMonth] = useState(() => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+      });
+      const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
+      const [mobileCalendarDrawerOpen, setMobileCalendarDrawerOpen] = useState(false);
+
+      const [showScheduleDueModal, setShowScheduleDueModal] = useState(false);
+      const [dueTitleInput, setDueTitleInput] = useState('');
+      const [dueDateInput, setDueDateInput] = useState(() => addDaysISO(getTodayISO(), 7));
+      const [dueSelectedClassIds, setDueSelectedClassIds] = useState(['class-8b4']);
+
+      const [showTestModal, setShowTestModal] = useState(false);
+      const [testTitleInput, setTestTitleInput] = useState('');
+      const [testDateInput, setTestDateInput] = useState(() => addDaysISO(getTodayISO(), 10));
+      const [testSelectedClassIds, setTestSelectedClassIds] = useState(['class-8b4']);
+      const [testNoHwWeek, setTestNoHwWeek] = useState(true);
+
+      const [showNewHwModal, setShowNewHwModal] = useState(false);
+      const [newHwTitle, setNewHwTitle] = useState('');
+      const [newHwDate, setNewHwDate] = useState(() => getTodayISO());
+
+      const [newClassName, setNewClassName] = useState('');
+      const [newPupilFirstName, setNewPupilFirstName] = useState('');
+      const [newPupilLastName, setNewPupilLastName] = useState('');
+      const [newPupilTutorGroup, setNewPupilTutorGroup] = useState('');
+      const [bulkImportText, setBulkImportText] = useState('');
+      const [showBulkImport, setShowBulkImport] = useState(false);
+
+      const [showUploadModal, setShowUploadModal] = useState(false);
+      const [uploadFileName, setUploadFileName] = useState('');
+      const [uploadedPreviewClasses, setUploadedPreviewClasses] = useState(null);
+      const [uploadMode, setUploadMode] = useState('merge');
+      const [uploadImportTasks, setUploadImportTasks] = useState(true);
+      const [uploadError, setUploadError] = useState('');
+      const [isParsingFile, setIsParsingFile] = useState(false);
+      const fileInputRef = useRef(null);
+
+      const [showSettingsModal, setShowSettingsModal] = useState(false);
+      const [passwordInputField, setPasswordInputField] = useState(savedPassword);
+      const [showPasscodeChars, setShowPasscodeChars] = useState(false);
+
+      const [toast, setToast] = useState(null);
+      const [confirmDialog, setConfirmDialog] = useState(null);
+
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast((prev) => (prev && prev.message === message ? null : prev)), 3500);
+      };
+
+      useEffect(() => {
+        const handleClickOutside = (e) => {
+          if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+        };
+        if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, [menuOpen]);
+
+      useEffect(() => { localStorage.setItem('hw_tracker_classes_v3', JSON.stringify(classes)); }, [classes]);
+      useEffect(() => { localStorage.setItem('hw_tracker_tests_v1', JSON.stringify(tests)); }, [tests]);
+      useEffect(() => { localStorage.setItem('hw_tracker_selected_class', selectedClassId); }, [selectedClassId]);
+      useEffect(() => { localStorage.setItem('hw_tracker_password', savedPassword); setPasswordInputField(savedPassword); }, [savedPassword]);
+      useEffect(() => { localStorage.setItem('hw_tracker_a11y', JSON.stringify(a11y)); }, [a11y]);
+      useEffect(() => {
+        localStorage.setItem('hw_tracker_theme', darkMode ? 'dark' : 'light');
+        if (darkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, [darkMode]);
+
+      // Inject Apple & Google Home Screen App Icon (Word-free)
+      useEffect(() => {
+        const renderCleanAppIcon = (size) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return '';
+
+          const bgGrad = ctx.createLinearGradient(0, 0, size, size);
+          bgGrad.addColorStop(0, '#fbf8f2');
+          bgGrad.addColorStop(1, '#ede4d3');
+          ctx.fillStyle = bgGrad;
+          ctx.fillRect(0, 0, size, size);
+
+          const inset = size * 0.055;
+          const radius = size * 0.16;
+          ctx.strokeStyle = '#d5c6ad';
+          ctx.lineWidth = Math.max(2, size * 0.012);
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(inset, inset, size - inset * 2, size - inset * 2, radius);
+          else ctx.rect(inset, inset, size - inset * 2, size - inset * 2);
+          ctx.stroke();
+
+          const cx = size * 0.5;
+          const cy = size * 0.51;
+          const bookW = size * 0.54;
+          const bookH = size * 0.44;
+          const bx = cx - bookW / 2;
+          const by = cy - bookH / 2;
+
+          ctx.fillStyle = '#4a3b2c';
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(bx - size * 0.02, by + size * 0.01, bookW + size * 0.04, bookH + size * 0.018, size * 0.045);
+          else ctx.rect(bx - size * 0.02, by + size * 0.01, bookW + size * 0.04, bookH + size * 0.018);
+          ctx.fill();
+
+          const pageGap = size * 0.012;
+          const pageW = (bookW - pageGap) / 2;
+
+          ctx.fillStyle = '#fffdf9';
+          ctx.fillRect(bx, by, pageW, bookH);
+          ctx.fillStyle = '#faf5eb';
+          ctx.fillRect(bx + pageW + pageGap, by, pageW, bookH);
+
+          const drawCheck = (x, y, s, color) => {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = Math.max(2.5, size * 0.022);
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(x - s * 0.45, y);
+            ctx.lineTo(x - s * 0.1, y + s * 0.38);
+            ctx.lineTo(x + s * 0.55, y - s * 0.42);
+            ctx.stroke();
+          };
+
+          const drawRule = (x, y, w) => {
+            ctx.strokeStyle = '#d6c9b4';
+            ctx.lineWidth = Math.max(2, size * 0.015);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + w, y);
+            ctx.stroke();
+          };
+
+          [0.24, 0.50, 0.76].forEach((ratio) => {
+            const ry = by + bookH * ratio;
+            drawCheck(bx + pageW * 0.25, ry, size * 0.042, '#059669');
+            drawRule(bx + pageW * 0.44, ry, pageW * 0.42);
+          });
+
+          [0.24, 0.50].forEach((ratio) => {
+            const ry = by + bookH * ratio;
+            drawCheck(bx + pageW + pageGap + pageW * 0.25, ry, size * 0.042, '#059669');
+            drawRule(bx + pageW + pageGap + pageW * 0.44, ry, pageW * 0.42);
+          });
+
+          const ry3 = by + bookH * 0.76;
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.arc(bx + pageW + pageGap + pageW * 0.25, ry3, size * 0.019, 0, Math.PI * 2);
+          ctx.fill();
+          drawRule(bx + pageW + pageGap + pageW * 0.44, ry3, pageW * 0.42);
+
+          const badgeR = size * 0.085;
+          const badgeX = bx + bookW - size * 0.02;
+          const badgeY = by - size * 0.01;
+          ctx.fillStyle = '#059669';
+          ctx.beginPath();
+          ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+          ctx.fill();
+          drawCheck(badgeX, badgeY + size * 0.004, size * 0.055, '#ffffff');
+
+          return canvas.toDataURL('image/png');
+        };
+
+        const icon180 = renderCleanAppIcon(180);
+        const icon192 = renderCleanAppIcon(192);
+        const icon512 = renderCleanAppIcon(512);
+
+        const setLink = (id, rel, href, extra = {}) => {
+          let el = document.getElementById(id);
+          if (!el) { el = document.createElement('link'); el.id = id; document.head.appendChild(el); }
+          el.rel = rel; el.href = href;
+          Object.entries(extra).forEach(([k, v]) => el.setAttribute(k, v));
+        };
+        if (icon180) setLink('app-apple-icon', 'apple-touch-icon', icon180, { sizes: '180x180' });
+        if (icon192) setLink('app-favicon', 'icon', icon192, { type: 'image/png', sizes: '192x192' });
+
+        const manifestObj = {
+          name: 'The home learning tracker',
+          short_name: 'Home Learning',
+          start_url: '.',
+          display: 'standalone',
+          background_color: '#f4efe6',
+          theme_color: '#fbf8f2',
+          icons: [
+            ...(icon192 ? [{ src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' }] : []),
+            ...(icon512 ? [{ src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }] : [])
+          ]
+        };
+        const blob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
+        const url = URL.createObjectURL(blob);
+        setLink('app-manifest', 'manifest', url);
+        return () => URL.revokeObjectURL(url);
+      }, []);
+
+      const activeFont = useMemo(() => FONT_OPTIONS.find((f) => f.id === a11y.font) || FONT_OPTIONS[0], [a11y.font]);
+      const activeFilter = useMemo(() => COLOUR_FILTERS.find((f) => f.id === a11y.colourFilter) || COLOUR_FILTERS[0], [a11y.colourFilter]);
+      const statusStyles = useMemo(() => getStatusStyles(a11y.colourBlindMode), [a11y.colourBlindMode]);
+
+      const a11yWrapperStyle = useMemo(() => ({
+        fontFamily: activeFont.family,
+        fontSize: a11y.fontSize === 'xlarge' ? '112%' : a11y.fontSize === 'large' ? '106%' : '100%',
+        letterSpacing: a11y.dyslexicSpacing ? '0.035em' : 'normal',
+        wordSpacing: a11y.dyslexicSpacing ? '0.12em' : 'normal',
+        lineHeight: a11y.dyslexicSpacing ? '1.65' : undefined,
+        filter: activeFilter.contrast !== 'none' ? activeFilter.contrast : undefined
+      }), [activeFont, a11y.fontSize, a11y.dyslexicSpacing, activeFilter]);
+
+      const updateA11y = (patch) => setA11y((prev) => ({ ...prev, ...patch }));
+
+      const currentClass = useMemo(() => classes.find((c) => c.id === selectedClassId) || classes[0], [classes, selectedClassId]);
+
+      useEffect(() => {
+        if (currentClass && currentClass.homeworks.length > 0) {
+          if (!currentClass.homeworks.some((h) => h.id === selectedHomeworkId)) {
+            setSelectedHomeworkId(currentClass.homeworks[currentClass.homeworks.length - 1].id);
+          }
+        } else {
+          setSelectedHomeworkId('');
+        }
+      }, [currentClass, selectedHomeworkId]);
+
+      const currentHomework = useMemo(() => currentClass ? currentClass.homeworks.find((h) => h.id === selectedHomeworkId) || null : null, [currentClass, selectedHomeworkId]);
+      const savedHomeworks = useMemo(() => currentClass ? currentClass.homeworks.filter((h) => h.saved) : [], [currentClass]);
+
+      const filteredPupils = useMemo(() => {
+        if (!currentClass) return [];
+        if (!searchQuery.trim()) return currentClass.pupils;
+        const q = searchQuery.toLowerCase();
+        return currentClass.pupils.filter((p) =>
+          p.firstName.toLowerCase().includes(q) ||
+          p.lastName.toLowerCase().includes(q) ||
+          (p.tutorGroup && p.tutorGroup.toLowerCase().includes(q)) ||
+          String(p.no).includes(q)
+        );
+      }, [currentClass, searchQuery]);
+
+      const classColorMap = useMemo(() => {
+        const map = {};
+        classes.forEach((cls, idx) => { map[cls.id] = CLASS_BADGE_COLORS[idx % CLASS_BADGE_COLORS.length]; });
+        return map;
+      }, [classes]);
+
+      const allHomeworksWithClass = useMemo(() => {
+        const items = [];
+        classes.forEach((cls) => {
+          (cls.homeworks || []).forEach((hw) => {
+            items.push({ ...hw, classId: cls.id, className: cls.name, totalPupils: cls.pupils.length, badgeColor: classColorMap[cls.id] || CLASS_BADGE_COLORS[0] });
+          });
+        });
+        return items.sort((a, b) => a.date.localeCompare(b.date));
+      }, [classes, classColorMap]);
+
+      const homeworksByDate = useMemo(() => {
+        const map = {};
+        allHomeworksWithClass.forEach((item) => { if (item.date) { (map[item.date] = map[item.date] || []).push(item); } });
+        return map;
+      }, [allHomeworksWithClass]);
+
+      const testsByDate = useMemo(() => {
+        const map = {};
+        tests.forEach((t) => { if (t.date) { (map[t.date] = map[t.date] || []).push(t); } });
+        return map;
+      }, [tests]);
+
+      const getNoHwWeekTestsForDate = (isoDate, filterClassIds = null) => {
+        if (!isoDate) return [];
+        return tests.filter((t) => {
+          if (!t.noHomeworkWeek || !t.date || !isDateInSameWeek(t.date, isoDate)) return false;
+          if (!filterClassIds || filterClassIds.length === 0) return true;
+          return t.classIds.some((cid) => filterClassIds.includes(cid));
+        });
+      };
+
+      const nextMonthSchedule = useMemo(() => {
+        const maxISO = addDaysISO(todayISO, 30);
+        const hwEvents = allHomeworksWithClass.filter((item) => item.date >= todayISO && item.date <= maxISO).map((hw) => ({ kind: 'homework', date: hw.date, data: hw }));
+        const testEvents = tests.filter((t) => t.date >= todayISO && t.date <= maxISO).map((t) => ({ kind: 'test', date: t.date, data: t }));
+        return [...hwEvents, ...testEvents].sort((a, b) => a.date.localeCompare(b.date));
+      }, [allHomeworksWithClass, tests, todayISO]);
+
+      const calendarDaysGrid = useMemo(() => {
+        const year = calendarMonth.getFullYear();
+        const month = calendarMonth.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const startOffset = (firstDay.getDay() + 6) % 7;
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const cells = [];
+        for (let i = 0; i < startOffset; i++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) {
+          cells.push({ day: d, iso: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` });
+        }
+        return cells;
+      }, [calendarMonth]);
+
+      const completeUnlockSession = () => {
+        const expiry = Date.now() + FOUR_WEEKS_MS;
+        setUnlockedUntil(expiry);
+        setIsUnlocked(true);
+        setLoginError('');
+        setPasswordInput('');
+        localStorage.setItem('hw_tracker_unlocked_until', String(expiry));
+      };
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (passwordInput === savedPassword) completeUnlockSession();
+        else setLoginError('Incorrect passcode. Please try again.');
+      };
+
+      const handleLockNow = () => {
+        setIsUnlocked(false);
+        setUnlockedUntil(0);
+        setMenuOpen(false);
+        localStorage.removeItem('hw_tracker_unlocked_until');
+      };
+
+      const handleChangePassword = (e) => {
+        e.preventDefault();
+        if (passwordInputField.trim().length < 4) {
+          showToast('Passcode must be at least 4 characters long.', 'error');
+          return;
+        }
+        setSavedPassword(passwordInputField.trim());
+        const expiry = Date.now() + FOUR_WEEKS_MS;
+        setUnlockedUntil(expiry);
+        localStorage.setItem('hw_tracker_unlocked_until', String(expiry));
+        showToast('Passcode updated and saved for 4 weeks!');
+      };
+
+      const togglePupilCompletion = (pupilId) => {
+        if (!currentClass || !currentHomework) return;
+        setClasses((prev) => prev.map((cls) => {
+          if (cls.id !== currentClass.id) return cls;
+          return {
+            ...cls,
+            homeworks: cls.homeworks.map((hw) => {
+              if (hw.id !== currentHomework.id) return hw;
+              const exists = hw.completedIds.includes(pupilId);
+              return { ...hw, completedIds: exists ? hw.completedIds.filter((id) => id !== pupilId) : [...hw.completedIds, pupilId] };
+            })
+          };
+        }));
+      };
+
+      const handleSaveCheck = () => {
+        if (!currentClass || !currentHomework) return;
+        setClasses((prev) => prev.map((cls) => cls.id === currentClass.id
+          ? { ...cls, homeworks: cls.homeworks.map((hw) => hw.id === currentHomework.id ? { ...hw, saved: true } : hw) }
+          : cls
+        ));
+        const doneCount = currentHomework.completedIds.length;
+        showToast(`Check saved! ${doneCount} completed, ${currentClass.pupils.length - doneCount} missed.`);
+      };
+
+      const handleMarkAll = (markDone) => {
+        if (!currentClass || !currentHomework) return;
+        const allIds = markDone ? currentClass.pupils.map((p) => p.id) : [];
+        setClasses((prev) => prev.map((cls) => cls.id === currentClass.id
+          ? { ...cls, homeworks: cls.homeworks.map((hw) => hw.id === currentHomework.id ? { ...hw, completedIds: allIds } : hw) }
+          : cls
+        ));
+      };
+
+      const handleCreateHomework = (e) => {
+        e.preventDefault();
+        if (!currentClass) return;
+        const title = newHwTitle.trim() || `Home Learning ${currentClass.homeworks.length + 1}`;
+        const newId = `hw-${Date.now()}`;
+        setClasses((prev) => prev.map((cls) => cls.id === currentClass.id
+          ? { ...cls, homeworks: [...cls.homeworks, { id: newId, title, date: newHwDate || getTodayISO(), saved: false, completedIds: [] }] }
+          : cls
+        ));
+        setSelectedHomeworkId(newId);
+        setNewHwTitle('');
+        setShowNewHwModal(false);
+        setActiveTab('check');
+        showToast(`New homework "${title}" created!`);
+      };
+
+      const handleDeleteHomework = (hwId) => {
+        if (!currentClass) return;
+        setConfirmDialog({
+          title: 'Delete Homework Check',
+          message: 'Are you sure you want to delete this homework record?',
+          onConfirm: () => {
+            setClasses((prev) => prev.map((cls) => cls.id === currentClass.id ? { ...cls, homeworks: cls.homeworks.filter((h) => h.id !== hwId) } : cls));
+            setConfirmDialog(null);
+            showToast('Homework deleted.');
+          }
+        });
+      };
+
+      const openScheduleModalForDate = (isoDate = null) => {
+        setMobileCalendarDrawerOpen(false);
+        setDueDateInput(isoDate || selectedCalendarDate || addDaysISO(todayISO, 7));
+        setDueTitleInput('');
+        setDueSelectedClassIds(currentClass ? [currentClass.id] : classes.length > 0 ? [classes[0].id] : []);
+        setShowScheduleDueModal(true);
+      };
+
+      const handleSaveScheduledHomework = (e) => {
+        e.preventDefault();
+        if (dueSelectedClassIds.length === 0) { showToast('Please select at least one class.', 'error'); return; }
+        const chosenDate = dueDateInput || getTodayISO();
+        let firstCreatedId = null;
+        setClasses((prev) => prev.map((cls) => {
+          if (!dueSelectedClassIds.includes(cls.id)) return cls;
+          const hwTitle = dueTitleInput.trim() || `Home Learning ${cls.homeworks.length + 1}`;
+          const newId = `hw-${cls.id}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+          if (!firstCreatedId) firstCreatedId = newId;
+          return { ...cls, homeworks: [...cls.homeworks, { id: newId, title: hwTitle, date: chosenDate, saved: false, completedIds: [] }] };
+        }));
+        if (dueSelectedClassIds[0] && firstCreatedId) {
+          setSelectedClassId(dueSelectedClassIds[0]);
+          setSelectedHomeworkId(firstCreatedId);
+        }
+        setShowScheduleDueModal(false);
+        showToast(`Homework due ${formatDateUK(chosenDate)} scheduled!`);
+      };
+
+      const openTestModalForDate = (isoDate = null) => {
+        setMobileCalendarDrawerOpen(false);
+        setTestDateInput(isoDate || selectedCalendarDate || addDaysISO(todayISO, 10));
+        setTestTitleInput('');
+        setTestSelectedClassIds(currentClass ? [currentClass.id] : classes.length > 0 ? [classes[0].id] : []);
+        setTestNoHwWeek(true);
+        setShowTestModal(true);
+      };
+
+      const handleSaveTest = (e) => {
+        e.preventDefault();
+        if (testSelectedClassIds.length === 0) { showToast('Please select at least one class.', 'error'); return; }
+        const chosenDate = testDateInput || getTodayISO();
+        const title = testTitleInput.trim() || 'Class Assessment / Test';
+        setTests((prev) => [...prev, { id: `test-${Date.now()}`, title, date: chosenDate, classIds: [...testSelectedClassIds], noHomeworkWeek: testNoHwWeek }]);
+        setShowTestModal(false);
+        showToast(`Booked "${title}" for ${formatDateUK(chosenDate)}!`);
+      };
+
+      const handleSpreadsheetFileSelected = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadError('');
+        setIsParsingFile(true);
+        setUploadFileName(file.name);
+        try {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext === 'csv' || ext === 'tsv' || ext === 'txt') {
+            const text = await file.text();
+            const delimiter = text.includes('\t') ? '\t' : text.includes(';') ? ';' : ',';
+            const rows = text.split(/\r?\n/).map((line) => line.split(delimiter).map((c) => c.replace(/^"|"$/g, '').trim()));
+            const parsedClass = parseSheetRowsToClass(file.name.replace(/\.[^/.]+$/, ''), rows, uploadImportTasks);
+            if (parsedClass.pupils.length === 0) throw new Error('No pupil names detected.');
+            setUploadedPreviewClasses([parsedClass]);
+          } else {
+            const buffer = await file.arrayBuffer();
+            const workbook = window.XLSX.read(buffer, { type: 'array' });
+            const parsedList = [];
+            workbook.SheetNames.forEach((sheetName) => {
+              const rows = window.XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+              const parsedClass = parseSheetRowsToClass(sheetName, rows, uploadImportTasks);
+              if (parsedClass.pupils.length > 0) parsedList.push(parsedClass);
+            });
+            if (parsedList.length === 0) throw new Error('No pupil rows found in spreadsheet.');
+            setUploadedPreviewClasses(parsedList);
+          }
+        } catch (err) {
+          setUploadError(err.message || 'Could not read spreadsheet.');
+          setUploadedPreviewClasses(null);
+        } finally {
+          setIsParsingFile(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+
+      const applyUploadedSpreadsheet = () => {
+        if (!uploadedPreviewClasses || uploadedPreviewClasses.length === 0) return;
+        if (uploadMode === 'replace') {
+          setClasses(uploadedPreviewClasses);
+          setSelectedClassId(uploadedPreviewClasses[0].id);
+          setShowUploadModal(false);
+          showToast(`Replaced register with ${uploadedPreviewClasses.length} classes!`);
+          return;
+        }
+        if (uploadMode === 'current' && currentClass) {
+          const mergedPupils = uploadedPreviewClasses.flatMap((c) => c.pupils).map((p, idx) => ({ ...p, no: idx + 1 }));
+          setClasses((prev) => prev.map((cls) => cls.id === currentClass.id ? { ...cls, pupils: mergedPupils } : cls));
+          setShowUploadModal(false);
+          showToast(`Refreshed ${currentClass.name}!`);
+          return;
+        }
+        setClasses((prev) => {
+          const next = [...prev];
+          uploadedPreviewClasses.forEach((impCls) => {
+            const idx = next.findIndex((e) => e.name.trim().toLowerCase() === impCls.name.trim().toLowerCase());
+            if (idx !== -1) next[idx] = { ...next[idx], pupils: impCls.pupils };
+            else next.push(impCls);
+          });
+          return next;
+        });
+        setShowUploadModal(false);
+        showToast('Spreadsheet applied!');
+      };
+
+      const handleDownloadTemplateCSV = () => {
+        const csv = 'No.,Last Name,First Name,Tutor Group,Task\n,,,,Date\n1,Ali,Bareera,7SAH,\n2,Alli,Charles,7EWI,';
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'Class_Register_Template.csv'; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      // --- LOCK SCREEN ---
+      if (!isUnlocked) {
+        return (
+          <div style={a11yWrapperStyle} className={`min-h-screen flex items-center justify-center p-4 sm:p-6 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#f4efe6] text-[#2c251d]'}`}>
+            {activeFilter.overlay !== 'transparent' && <div className="fixed inset-0 pointer-events-none z-[100]" style={{ backgroundColor: activeFilter.overlay }} />}
+            <div className={`w-full max-w-md rounded-3xl p-6 sm:p-8 shadow-2xl border relative z-10 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-stone-800 dark:bg-indigo-600 flex items-center justify-center text-amber-50 dark:text-white shadow-lg">
+                  <Icons.Lock className="w-6 h-6" />
+                </div>
+                <button type="button" onClick={() => setDarkMode(!darkMode)} className={`p-2.5 rounded-xl border ${darkMode ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-[#f2ebe0] border-[#ded2bd] text-[#5e5243]'}`}>
+                  {darkMode ? <Icons.Sun className="w-5 h-5" /> : <Icons.Moon className="w-5 h-5" />}
+                </button>
+              </div>
+              <h1 className="text-2xl font-extrabold tracking-tight mb-1">The home learning tracker</h1>
+              <p className={`text-sm mb-6 ${darkMode ? 'text-slate-400' : 'text-[#6e604f]'}`}>
+                Enter your teacher passcode. Your session stays unlocked for <strong>4 weeks</strong>.
+              </p>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="Enter passcode (default: prof2026)"
+                  className={`w-full px-4 py-3.5 rounded-2xl border text-base outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-[#f5efe4] border-[#dcd0ba] text-[#2c251d]'}`}
+                  autoFocus
+                />
+                {loginError && <p className="text-rose-600 text-xs font-medium">{loginError}</p>}
+                <button type="submit" className="w-full py-3.5 px-4 rounded-2xl bg-stone-800 hover:bg-stone-700 dark:bg-indigo-600 text-amber-50 dark:text-white font-bold shadow-lg flex items-center justify-center gap-2">
+                  <Icons.Unlock className="w-5 h-5" />
+                  <span>Unlock for 4 Weeks</span>
+                </button>
+                <button type="button" onClick={completeUnlockSession} className={`w-full py-2.5 px-4 rounded-2xl border text-xs font-bold flex items-center justify-center gap-1.5 ${darkMode ? 'bg-slate-800/70 border-slate-700 text-slate-300' : 'bg-[#f2ebe0] border-[#dcd0ba] text-[#5e5243]'}`}>
+                  <Icons.ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Quick Unlock</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      const completedCount = currentHomework ? currentHomework.completedIds.length : 0;
+      const totalPupilsCount = currentClass ? currentClass.pupils.length : 0;
+      const missedCount = Math.max(0, totalPupilsCount - completedCount);
+
+      const renderCalendarSidebar = (isDrawer = false) => {
+        const monthLabel = calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        return (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-800/10 dark:bg-indigo-500/20 text-amber-900 dark:text-indigo-300">
+                  <Icons.Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-extrabold leading-tight">Schedule &amp; Tests</h2>
+                  <p className="text-[11px] text-[#7a6d5c] dark:text-slate-400">Next 30 days</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => openTestModalForDate(selectedCalendarDate)} className="px-2.5 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold flex items-center gap-1">
+                  <Icons.GraduationCap className="w-3.5 h-3.5" />
+                  <span>Test</span>
+                </button>
+                <button type="button" onClick={() => openScheduleModalForDate(selectedCalendarDate)} className="px-2.5 py-1.5 rounded-xl bg-stone-800 dark:bg-indigo-600 text-amber-50 dark:text-white text-xs font-bold flex items-center gap-1">
+                  <Icons.Plus className="w-3.5 h-3.5" />
+                  <span>HW</span>
+                </button>
+                {isDrawer && (
+                  <button type="button" onClick={() => setMobileCalendarDrawerOpen(false)} className="p-1.5 rounded-xl bg-[#ede5d6] dark:bg-slate-800">
+                    <Icons.X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-[#f5efe4] dark:bg-slate-800/70 border border-[#e3d9c6] dark:border-slate-800">
+              <div className="flex items-center justify-between mb-2">
+                <button type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} className="p-1 rounded-lg hover:bg-[#e8decb] dark:hover:bg-slate-700">
+                  <Icons.ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-extrabold">{monthLabel}</span>
+                <button type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))} className="p-1 rounded-lg hover:bg-[#e8decb] dark:hover:bg-slate-700">
+                  <Icons.ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((wd) => (
+                  <div key={wd} className="text-[10px] font-bold uppercase text-[#8a7c68] dark:text-slate-400">{wd}</div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDaysGrid.map((cell, idx) => {
+                  if (!cell) return <div key={`e-${idx}`} className="h-8" />;
+                  const dayItems = homeworksByDate[cell.iso] || [];
+                  const dayTests = testsByDate[cell.iso] || [];
+                  const isNoHwWeek = getNoHwWeekTestsForDate(cell.iso).length > 0;
+                  const isToday = cell.iso === todayISO;
+                  const isSelected = cell.iso === selectedCalendarDate;
+
+                  return (
+                    <button
+                      key={cell.iso}
+                      type="button"
+                      onClick={() => setSelectedCalendarDate((prev) => (prev === cell.iso ? null : cell.iso))}
+                      className={`h-8 rounded-lg flex flex-col items-center justify-center text-xs font-bold transition ${
+                        isSelected ? 'bg-stone-800 dark:bg-indigo-600 text-white' :
+                        dayTests.length > 0 ? 'bg-amber-200/80 dark:bg-amber-900/50 text-amber-950 dark:text-amber-100 ring-1 ring-amber-500' :
+                        isToday ? 'bg-amber-800/15 dark:bg-indigo-900/50 ring-1 ring-amber-700/50' :
+                        isNoHwWeek ? 'bg-amber-100/55 dark:bg-amber-950/25 border border-dashed border-amber-500/60' :
+                        'hover:bg-[#e9dfc9] dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <span className="leading-none">{cell.day}</span>
+                      {(dayItems.length > 0 || dayTests.length > 0) && (
+                        <div className="flex gap-0.5 mt-0.5">
+                          {dayTests.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />}
+                          {dayItems.slice(0, 3).map((item) => <span key={item.id} className={`w-1.5 h-1.5 rounded-full ${item.badgeColor.dot}`} />)}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-[380px] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#7a6d5c] dark:text-slate-400">Upcoming (Next 30 Days)</h3>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#ede5d6] dark:bg-slate-800">{nextMonthSchedule.length}</span>
+              </div>
+
+              {nextMonthSchedule.map((ev) => {
+                const daysAway = diffDays(todayISO, ev.date);
+                const badgeText = daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : `In ${daysAway}d`;
+
+                if (ev.kind === 'test') {
+                  const t = ev.data;
+                  return (
+                    <div key={t.id} className="p-3 rounded-2xl bg-amber-100/75 dark:bg-amber-950/35 border border-amber-400/80 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-600 text-white">TEST</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-950">{badgeText}</span>
+                          <button type="button" onClick={() => setTests((p) => p.filter((x) => x.id !== t.id))} className="text-[#8a7c68] hover:text-rose-600">
+                            <Icons.Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs font-extrabold">{t.title}</p>
+                      <div className="flex flex-wrap gap-1">
+                        {t.classIds.map((cid) => {
+                          const cls = classes.find((c) => c.id === cid);
+                          if (!cls) return null;
+                          return <span key={cid} className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border ${(classColorMap[cid] || CLASS_BADGE_COLORS[0]).pill}`}>{cls.name}</span>;
+                        })}
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] pt-1">
+                        <span>{formatShortDateUK(t.date)}</span>
+                        <button
+                          type="button"
+                          onClick={() => setTests((p) => p.map((x) => x.id === t.id ? { ...x, noHomeworkWeek: !x.noHomeworkWeek } : x))}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${t.noHomeworkWeek ? 'bg-amber-700 text-white' : 'bg-[#e9dfc9] dark:bg-slate-800'}`}
+                        >
+                          {t.noHomeworkWeek ? 'No HW Week' : 'HW Allowed'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const item = ev.data;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { setSelectedClassId(item.classId); setSelectedHomeworkId(item.id); setActiveTab('check'); setMobileCalendarDrawerOpen(false); }}
+                    className="w-full text-left p-3 rounded-2xl border bg-[#f8f3ea] dark:bg-slate-800/60 border-[#e3d9c6] dark:border-slate-800 hover:border-amber-600 transition"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${item.badgeColor.pill}`}>{item.className}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#ebe2d2] dark:bg-slate-700">{badgeText}</span>
+                    </div>
+                    <p className="text-xs font-bold truncate">{item.title}</p>
+                    <p className="text-[11px] text-[#7a6d5c] dark:text-slate-400 mt-1">{formatShortDateUK(item.date)}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      };
+
+      return (
+        <div style={a11yWrapperStyle} className={`min-h-screen pb-24 sm:pb-12 transition-colors relative ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#f4efe6] text-[#2c251d]'}`}>
+          {activeFilter.overlay !== 'transparent' && <div className="fixed inset-0 pointer-events-none z-[100]" style={{ backgroundColor: activeFilter.overlay }} />}
+
+          {toast && (
+            <div className="fixed bottom-20 sm:bottom-5 right-4 left-4 sm:left-auto z-[70] max-w-md mx-auto sm:mx-0">
+              <div className={`px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-3 text-sm font-semibold ${toast.type === 'error' ? 'bg-rose-600 text-white border-rose-500' : 'bg-stone-800 dark:bg-emerald-600 text-amber-50 dark:text-white border-stone-700'}`}>
+                <span>{toast.message}</span>
+              </div>
+            </div>
+          )}
+
+          {confirmDialog && (
+            <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                <h3 className="text-lg font-extrabold mb-2">{confirmDialog.title}</h3>
+                <p className="text-sm mb-6 opacity-80">{confirmDialog.message}</p>
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={() => setConfirmDialog(null)} className="px-4 py-2.5 rounded-xl font-semibold text-sm bg-[#ede5d6] dark:bg-slate-800">Cancel</button>
+                  <button type="button" onClick={confirmDialog.onConfirm} className="px-4 py-2.5 rounded-xl bg-rose-600 text-white font-semibold text-sm">Confirm</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Header with Title & Three-Line Menu */}
+          <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-[#fbf8f2]/95 border-[#e2d7c3]'}`}>
+            <div className="max-w-[1440px] mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-stone-800 dark:bg-indigo-600 flex items-center justify-center text-amber-50 dark:text-white shadow-md shrink-0">
+                  <Icons.ClipboardCheck className="w-5 h-5" />
+                </div>
+                <h1 className="text-lg sm:text-xl font-extrabold tracking-tight truncate">The home learning tracker</h1>
+              </div>
+
+              <div className="relative" ref={menuRef}>
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((p) => !p)}
+                  className={`p-2.5 rounded-2xl border transition ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-[#f2ebe0] border-[#ded2bd] text-[#2c251d]'}`}
+                  aria-label="Open menu"
+                >
+                  {menuOpen ? <Icons.X className="w-5 h-5" /> : <Icons.Menu className="w-5 h-5" />}
+                </button>
+
+                {menuOpen && (
+                  <div className={`absolute right-0 mt-2 w-64 rounded-2xl shadow-2xl border py-2 z-50 ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-[#fbf8f2] border-[#dcd0ba] text-[#2c251d]'}`}>
+                    <button type="button" onClick={() => { setMenuOpen(false); setShowUploadModal(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                      <Icons.Upload className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
+                      <span>Upload Spreadsheet</span>
+                    </button>
+                    <button type="button" onClick={() => { setMenuOpen(false); setShowSettingsModal(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                      <Icons.Sliders className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
+                      <span>Settings &amp; Accessibility</span>
+                    </button>
+                    <button type="button" onClick={() => { setMenuOpen(false); setMobileCalendarDrawerOpen(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800 xl:hidden">
+                      <Icons.Calendar className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
+                      <span>Schedule &amp; Tests</span>
+                    </button>
+                    <div className="my-1 border-t border-[#e5dccb] dark:border-slate-800" />
+                    <button type="button" onClick={() => { setDarkMode(!darkMode); setMenuOpen(false); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                      {darkMode ? <Icons.Sun className="w-4 h-4 text-amber-400" /> : <Icons.Moon className="w-4 h-4" />}
+                      <span>{darkMode ? 'Cream Light Mode' : 'Dark Mode'}</span>
+                    </button>
+                    <button type="button" onClick={handleLockNow} className="w-full px-4 py-3 text-left text-sm font-bold text-rose-600 flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                      <Icons.Lock className="w-4 h-4" />
+                      <span>Lock Tracker Now</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Class Tabs */}
+            <div className="max-w-[1440px] mx-auto px-3 sm:px-6 pb-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+              {classes.map((cls) => {
+                const active = cls.id === currentClass?.id;
+                return (
+                  <button
+                    key={cls.id}
+                    type="button"
+                    onClick={() => setSelectedClassId(cls.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition flex items-center gap-2 shrink-0 ${
+                      active ? 'bg-stone-800 dark:bg-indigo-600 text-amber-50 dark:text-white shadow-md' :
+                      darkMode ? 'bg-slate-800/80 text-slate-300' : 'bg-[#ede5d6] text-[#453a2e]'
+                    }`}
+                  >
+                    <span>{cls.name}</span>
+                    <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${active ? 'bg-white/20 text-white' : 'bg-[#dfd4bf] dark:bg-slate-700'}`}>{cls.pupils.length}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </header>
+
+          {/* Main Workspace + Right-Side Calendar */}
+          <div className="max-w-[1440px] mx-auto px-3 sm:px-6 pt-5 flex flex-col xl:flex-row items-start gap-6">
+            <main className="flex-1 min-w-0 w-full">
+              <div className={`hidden sm:grid grid-cols-4 gap-2 p-1.5 rounded-2xl mb-6 border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                {[
+                  { id: 'check', label: 'Homework Check', IconComp: Icons.ClipboardCheck },
+                  { id: 'grades', label: 'Half-Term Grades', IconComp: Icons.Award },
+                  { id: 'manage', label: 'Pupils & Classes', IconComp: Icons.Users },
+                  { id: 'settings', label: 'Settings', IconComp: Icons.Settings }
+                ].map(({ id, label, IconComp }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setActiveTab(id)}
+                    className={`py-2.5 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition ${
+                      activeTab === id ? 'bg-stone-800 dark:bg-indigo-600 text-amber-50 dark:text-white shadow-md' : 'opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <IconComp className="w-4 h-4" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* TAB 1: HOMEWORK CHECK */}
+              {activeTab === 'check' && currentClass && (
+                <div className="space-y-4">
+                  <div className={`p-4 sm:p-5 rounded-3xl border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-indigo-400">Class {currentClass.name}</span>
+                          {currentHomework && (
+                            <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${currentHomework.saved ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-amber-500/20 text-amber-900 dark:text-amber-300'}`}>
+                              {currentHomework.saved ? 'Saved Check' : 'In Progress'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            value={currentHomework?.id || ''}
+                            onChange={(e) => setSelectedHomeworkId(e.target.value)}
+                            className={`px-3.5 py-2.5 rounded-xl border text-sm font-bold outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-[#f4ede0] border-[#dcd0ba] text-[#2c251d]'}`}
+                          >
+                            {currentClass.homeworks.map((hw) => (
+                              <option key={hw.id} value={hw.id}>{hw.title} ({formatDateUK(hw.date)}) {hw.saved ? '✓' : '•'}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => { setNewHwDate(getTodayISO()); setShowNewHwModal(true); }} className="px-3.5 py-2.5 rounded-xl bg-stone-800 dark:bg-indigo-600 text-amber-50 dark:text-white text-xs sm:text-sm font-bold flex items-center gap-1.5">
+                            <Icons.Plus className="w-4 h-4" />
+                            <span>New Check</span>
+                          </button>
+                          {currentHomework && (
+                            <button type="button" onClick={() => handleDeleteHomework(currentHomework.id)} className="p-2.5 rounded-xl border bg-[#f4ede0] dark:bg-slate-800 border-[#dcd0ba] dark:border-slate-700 hover:text-rose-600">
+                              <Icons.Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {currentHomework && (
+                        <div className="flex items-center gap-2">
+                          <div className={`px-3 py-2 rounded-2xl border text-center min-w-[70px] ${statusStyles.grade3.softBg}`}>
+                            <p className="text-[11px] font-bold">Done</p>
+                            <p className="text-lg font-extrabold">{completedCount}</p>
+                          </div>
+                          <div className={`px-3 py-2 rounded-2xl border text-center min-w-[70px] ${statusStyles.grade1.softBg}`}>
+                            <p className="text-[11px] font-bold">Missed</p>
+                            <p className="text-lg font-extrabold">{missedCount}</p>
+                          </div>
+                          <button type="button" onClick={handleSaveCheck} className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm shadow-lg flex items-center gap-2">
+                            <Icons.Save className="w-4 h-4" />
+                            <span>Save Check</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-[#e5dccb] dark:border-slate-800 flex flex-col sm:flex-row gap-2.5">
+                      <div className="relative flex-1">
+                        <Icons.Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 opacity-40" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search pupil..."
+                          className={`w-full pl-10 pr-4 py-2 rounded-xl border text-sm outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-[#f4ede0] border-[#dcd0ba] text-[#2c251d]'}`}
+                        />
+                      </div>
+                      {currentHomework && (
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => handleMarkAll(true)} className="px-3 py-2 rounded-xl border text-xs font-bold bg-[#f4ede0] dark:bg-slate-800 border-[#dcd0ba] dark:border-slate-700 text-emerald-800 dark:text-emerald-400">Mark All</button>
+                          <button type="button" onClick={() => handleMarkAll(false)} className="px-3 py-2 rounded-xl border text-xs font-bold bg-[#f4ede0] dark:bg-slate-800 border-[#dcd0ba] dark:border-slate-700">Untick All</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {currentHomework && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {filteredPupils.map((pupil) => {
+                        const isDone = currentHomework.completedIds.includes(pupil.id);
+                        const isSavedNotDone = currentHomework.saved && !isDone;
+                        const gradeInfo = calculateHalfTermGrade(pupil.id, savedHomeworks, a11y.colourBlindMode);
+                        let cardStyle = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]';
+                        if (isDone) cardStyle = statusStyles.grade3.cardDone;
+                        else if (isSavedNotDone) cardStyle = statusStyles.grade1.cardMissed;
+
+                        return (
+                          <button
+                            key={pupil.id}
+                            type="button"
+                            onClick={() => togglePupilCompletion(pupil.id)}
+                            className={`p-3.5 rounded-2xl border-2 text-left transition flex items-center justify-between gap-3 active:scale-[0.98] ${cardStyle}`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-xs shrink-0 ${isDone || isSavedNotDone ? 'bg-black/20 text-white' : 'bg-[#ede5d6] dark:bg-slate-800'}`}>
+                                {pupil.no}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-sm sm:text-base truncate">{pupil.firstName} {pupil.lastName}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {pupil.tutorGroup && <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${isDone || isSavedNotDone ? 'bg-black/20 text-white' : 'opacity-65'}`}>{pupil.tutorGroup}</span>}
+                                  {gradeInfo.grade !== null && <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${isDone || isSavedNotDone ? 'bg-black/25 text-white' : gradeInfo.softBg}`}>HT: {gradeInfo.grade}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="shrink-0">
+                              {isDone ? <Icons.CheckCircle2 className="w-7 h-7 text-white" /> : isSavedNotDone ? <Icons.XCircle className="w-7 h-7 text-white" /> : <div className="w-7 h-7 rounded-full border-2 border-[#d3c6b0] dark:border-slate-700" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: HALF-TERM GRADES */}
+              {activeTab === 'grades' && currentClass && (
+                <div className="space-y-4">
+                  <div className={`p-5 rounded-3xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                    <h2 className="text-lg font-extrabold mb-3">Half-Term Report — Class {currentClass.name} ({savedHomeworks.length} checks)</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className={`p-3 rounded-2xl border flex items-center gap-3 ${statusStyles.grade3.softBg}`}>
+                        <div className={`w-9 h-9 rounded-xl font-extrabold flex items-center justify-center border ${statusStyles.grade3.badgeBg}`}>3</div>
+                        <div><p className="text-xs font-extrabold">Grade 3 — Excellent</p><p className="text-[11px]">80% to 100% completed</p></div>
+                      </div>
+                      <div className={`p-3 rounded-2xl border flex items-center gap-3 ${statusStyles.grade2.softBg}`}>
+                        <div className={`w-9 h-9 rounded-xl font-extrabold flex items-center justify-center border ${statusStyles.grade2.badgeBg}`}>2</div>
+                        <div><p className="text-xs font-extrabold">Grade 2 — Good</p><p className="text-[11px]">50% to 79% completed</p></div>
+                      </div>
+                      <div className={`p-3 rounded-2xl border flex items-center gap-3 ${statusStyles.grade1.softBg}`}>
+                        <div className={`w-9 h-9 rounded-xl font-extrabold flex items-center justify-center border ${statusStyles.grade1.badgeBg}`}>1</div>
+                        <div><p className="text-xs font-extrabold">Grade 1 — Concern</p><p className="text-[11px]">Missed 3+ tasks (or &lt;50%)</p></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`rounded-3xl border overflow-hidden ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className={`border-b text-xs uppercase ${darkMode ? 'bg-slate-800/70 border-slate-800 text-slate-400' : 'bg-[#f1e9da] border-[#e2d7c3] text-[#6e604f]'}`}>
+                            <th className="py-3 px-4">No.</th>
+                            <th className="py-3 px-4">Pupil</th>
+                            {savedHomeworks.map((hw) => <th key={hw.id} className="py-3 px-3 text-center">{hw.title}</th>)}
+                            <th className="py-3 px-3 text-center">%</th>
+                            <th className="py-3 px-4 text-center">HT Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#e5dccb] dark:divide-slate-800 text-sm">
+                          {currentClass.pupils.map((pupil) => {
+                            const info = calculateHalfTermGrade(pupil.id, savedHomeworks, a11y.colourBlindMode);
+                            return (
+                              <tr key={pupil.id}>
+                                <td className="py-3 px-4 opacity-60 font-bold">{pupil.no}</td>
+                                <td className="py-3 px-4 font-extrabold">{pupil.firstName} {pupil.lastName}</td>
+                                {savedHomeworks.map((hw) => {
+                                  const done = hw.completedIds.includes(pupil.id);
+                                  return (
+                                    <td key={hw.id} className="py-3 px-3 text-center">
+                                      <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold border ${done ? statusStyles.grade3.softBg : statusStyles.grade1.softBg}`}>
+                                        {done ? statusStyles.grade3.symbol : statusStyles.grade1.symbol}
+                                      </span>
+                                    </td>
+                                  );
+                                })}
+                                <td className="py-3 px-3 text-center font-bold">{info.percentage}%</td>
+                                <td className="py-3 px-4 text-center">
+                                  <span className={`px-3 py-1 rounded-xl text-xs font-extrabold border ${info.badgeBg}`}>
+                                    {info.grade !== null ? `${info.grade} • ${info.label}` : 'No Data'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: PUPILS & CLASSES */}
+              {activeTab === 'manage' && currentClass && (
+                <div className="space-y-6">
+                  <div className={`p-5 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                    <div>
+                      <h3 className="text-base font-extrabold">Refresh Classes &amp; Pupils via Spreadsheet</h3>
+                      <p className="text-xs opacity-75">Upload .xlsx, .xls or .csv class registers to update pupils.</p>
+                    </div>
+                    <button type="button" onClick={() => setShowUploadModal(true)} className="px-4 py-3 rounded-2xl bg-stone-800 dark:bg-indigo-600 text-amber-50 dark:text-white text-xs sm:text-sm font-extrabold flex items-center gap-2">
+                      <Icons.Upload className="w-4 h-4" />
+                      <span>Upload Spreadsheet</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className={`p-5 rounded-3xl border space-y-4 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                      <h3 className="text-base font-extrabold">Manage Classes</h3>
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!newClassName.trim()) return;
+                        const id = `class-${Date.now()}`;
+                        setClasses((p) => [...p, { id, name: newClassName.trim(), pupils: [], homeworks: [{ id: `hw-${Date.now()}`, title: 'Home Learning 1', date: getTodayISO(), saved: false, completedIds: [] }] }]);
+                        setSelectedClassId(id); setNewClassName(''); showToast('Class created!');
+                      }} className="flex gap-2">
+                        <input type="text" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} placeholder="New class name..." className={`flex-1 px-3 py-2 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                        <button type="submit" className="px-4 py-2 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-sm font-bold">Add</button>
+                      </form>
+                      <div className="space-y-2">
+                        {classes.map((cls) => (
+                          <div key={cls.id} className="p-2.5 rounded-xl border border-[#e5dccb] dark:border-slate-800 flex items-center justify-between">
+                            <button type="button" onClick={() => setSelectedClassId(cls.id)} className="font-bold text-sm">{cls.name} ({cls.pupils.length})</button>
+                            {classes.length > 1 && (
+                              <button type="button" onClick={() => setClasses((p) => p.filter((c) => c.id !== cls.id))} className="text-rose-600 p-1">
+                                <Icons.Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={`lg:col-span-2 p-5 rounded-3xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                      <h3 className="text-base font-extrabold mb-3">Pupils in {currentClass.name} ({currentClass.pupils.length})</h3>
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!newPupilFirstName.trim() && !newPupilLastName.trim()) return;
+                        const pupil = { id: `p-${Date.now()}`, no: currentClass.pupils.length + 1, firstName: newPupilFirstName.trim() || 'Pupil', lastName: newPupilLastName.trim(), tutorGroup: newPupilTutorGroup.trim() };
+                        setClasses((p) => p.map((c) => c.id === currentClass.id ? { ...c, pupils: [...c.pupils, pupil] } : c));
+                        setNewPupilFirstName(''); setNewPupilLastName(''); setNewPupilTutorGroup('');
+                        showToast('Pupil added!');
+                      }} className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4">
+                        <input type="text" value={newPupilFirstName} onChange={(e) => setNewPupilFirstName(e.target.value)} placeholder="Forename" className={`px-3 py-2 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                        <input type="text" value={newPupilLastName} onChange={(e) => setNewPupilLastName(e.target.value)} placeholder="Surname" className={`px-3 py-2 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                        <input type="text" value={newPupilTutorGroup} onChange={(e) => setNewPupilTutorGroup(e.target.value)} placeholder="Tutor Group" className={`px-3 py-2 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                        <button type="submit" className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-sm">Add Pupil</button>
+                      </form>
+                      <div className="divide-y divide-[#e5dccb] dark:divide-slate-800 max-h-96 overflow-y-auto">
+                        {currentClass.pupils.map((p) => (
+                          <div key={p.id} className="py-2 flex items-center justify-between text-sm">
+                            <span><strong className="opacity-50 mr-2">{p.no}.</strong><strong>{p.firstName} {p.lastName}</strong> <span className="opacity-60 text-xs">{p.tutorGroup}</span></span>
+                            <button type="button" onClick={() => setClasses((prev) => prev.map((c) => c.id === currentClass.id ? { ...c, pupils: c.pupils.filter((x) => x.id !== p.id).map((x, i) => ({ ...x, no: i + 1 })) } : c))} className="text-rose-600 p-1">
+                              <Icons.Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: SETTINGS */}
+              {activeTab === 'settings' && (
+                <div className="max-w-2xl mx-auto space-y-6">
+                  <div className={`p-6 rounded-3xl border space-y-4 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                    <h3 className="text-base font-extrabold">Change Teacher Passcode (4-Week Session)</h3>
+                    <form onSubmit={handleChangePassword} className="flex gap-2">
+                      <input type={showPasscodeChars ? 'text' : 'password'} value={passwordInputField} onChange={(e) => setPasswordInputField(e.target.value)} className={`flex-1 px-4 py-2.5 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                      <button type="button" onClick={() => setShowPasscodeChars(!showPasscodeChars)} className="px-3 rounded-xl border border-[#dcd0ba] dark:border-slate-700">
+                        {showPasscodeChars ? <Icons.EyeOff className="w-4 h-4" /> : <Icons.Eye className="w-4 h-4" />}
+                      </button>
+                      <button type="submit" className="px-5 py-2.5 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white font-bold text-sm">Save</button>
+                    </form>
+                  </div>
+
+                  <div className={`p-6 rounded-3xl border space-y-4 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                    <h3 className="text-base font-extrabold">Accessibility &amp; Visual Comfort</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {FONT_OPTIONS.map((f) => (
+                        <button key={f.id} type="button" onClick={() => updateA11y({ font: f.id })} style={{ fontFamily: f.family }} className={`p-3 rounded-2xl border text-left ${a11y.font === f.id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'bg-[#f4ede0] dark:bg-slate-800 border-[#dcd0ba] dark:border-slate-700'}`}>
+                          <p className="text-xs font-extrabold">{f.name}</p>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {CB_PALETTES.map((cb) => (
+                        <button key={cb.id} type="button" onClick={() => updateA11y({ colourBlindMode: cb.id })} className={`p-3 rounded-2xl border text-left ${a11y.colourBlindMode === cb.id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'bg-[#f4ede0] dark:bg-slate-800 border-[#dcd0ba] dark:border-slate-700'}`}>
+                          <p className="text-xs font-extrabold">{cb.name}</p>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {COLOUR_FILTERS.map((cf) => (
+                        <button key={cf.id} type="button" onClick={() => updateA11y({ colourFilter: cf.id })} className={`p-2 rounded-xl border text-xs font-bold ${a11y.colourFilter === cf.id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'bg-[#f4ede0] dark:bg-slate-800 border-[#dcd0ba] dark:border-slate-700'}`}>
+                          {cf.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
+
+            {/* Right-Side Calendar Bar (Desktop) */}
+            <aside className="hidden xl:block w-80 shrink-0 sticky top-32">
+              <div className={`p-4 rounded-3xl border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                {renderCalendarSidebar(false)}
+              </div>
+            </aside>
+          </div>
+
+          {/* Mobile Slide-over Calendar Drawer */}
+          {mobileCalendarDrawerOpen && (
+            <div className="fixed inset-0 z-50 xl:hidden flex justify-end">
+              <div className="fixed inset-0 bg-black/60" onClick={() => setMobileCalendarDrawerOpen(false)} />
+              <div className={`relative z-10 w-full max-w-sm h-full overflow-y-auto p-4 border-l ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                {renderCalendarSidebar(true)}
+              </div>
+            </div>
+          )}
+
+          {/* Quick Settings Modal */}
+          {showSettingsModal && (
+            <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
+              <div className={`w-full max-w-xl rounded-3xl p-6 border shadow-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-extrabold">Settings &amp; Accessibility</h3>
+                  <button type="button" onClick={() => setShowSettingsModal(false)} className="p-2 rounded-xl bg-[#ede5d6] dark:bg-slate-800"><Icons.X className="w-4 h-4" /></button>
+                </div>
+                <form onSubmit={handleChangePassword} className="flex gap-2 mb-4">
+                  <input type={showPasscodeChars ? 'text' : 'password'} value={passwordInputField} onChange={(e) => setPasswordInputField(e.target.value)} className={`flex-1 px-3 py-2 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                  <button type="submit" className="px-4 py-2 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-xs font-bold">Update Passcode</button>
+                </form>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {FONT_OPTIONS.map((f) => (
+                    <button key={f.id} type="button" onClick={() => updateA11y({ font: f.id })} className={`p-2.5 rounded-xl border text-left text-xs font-bold ${a11y.font === f.id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'bg-[#f4ede0] dark:bg-slate-800'}`}>{f.name}</button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {CB_PALETTES.map((cb) => (
+                    <button key={cb.id} type="button" onClick={() => updateA11y({ colourBlindMode: cb.id })} className={`p-2.5 rounded-xl border text-left text-xs font-bold ${a11y.colourBlindMode === cb.id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'bg-[#f4ede0] dark:bg-slate-800'}`}>{cb.name}</button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {COLOUR_FILTERS.map((cf) => (
+                    <button key={cf.id} type="button" onClick={() => updateA11y({ colourFilter: cf.id })} className={`p-2 rounded-xl border text-xs font-bold ${a11y.colourFilter === cf.id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'bg-[#f4ede0] dark:bg-slate-800'}`}>{cf.name}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Book Test Modal */}
+          {showTestModal && (
+            <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
+              <div className={`w-full max-w-md rounded-3xl p-6 border shadow-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                <h3 className="text-lg font-extrabold mb-3">Book Test / Assessment</h3>
+                <form onSubmit={handleSaveTest} className="space-y-4">
+                  <input type="text" value={testTitleInput} onChange={(e) => setTestTitleInput(e.target.value)} placeholder="Assessment title..." className={`w-full px-4 py-3 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} autoFocus />
+                  <input type="date" value={testDateInput} onChange={(e) => setTestDateInput(e.target.value)} className={`w-full px-4 py-3 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                  <div className="flex flex-wrap gap-2">
+                    {classes.map((cls) => {
+                      const sel = testSelectedClassIds.includes(cls.id);
+                      return (
+                        <button key={cls.id} type="button" onClick={() => setTestSelectedClassIds((p) => sel ? p.filter((x) => x !== cls.id) : [...p, cls.id])} className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border ${sel ? 'bg-amber-700 text-white border-amber-700' : 'bg-[#f4ede0] dark:bg-slate-800'}`}>{cls.name}</button>
+                      );
+                    })}
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                    <input type="checkbox" checked={testNoHwWeek} onChange={(e) => setTestNoHwWeek(e.target.checked)} />
+                    <span>Remind me not to set homework that week</span>
+                  </label>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setShowTestModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold">Cancel</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-amber-700 text-white text-sm font-bold">Save Test</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Schedule Due Homework Modal */}
+          {showScheduleDueModal && (
+            <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
+              <div className={`w-full max-w-md rounded-3xl p-6 border shadow-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                <h3 className="text-lg font-extrabold mb-3">Assign Homework Due Date</h3>
+                <form onSubmit={handleSaveScheduledHomework} className="space-y-4">
+                  <input type="text" value={dueTitleInput} onChange={(e) => setDueTitleInput(e.target.value)} placeholder="Homework title..." className={`w-full px-4 py-3 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} autoFocus />
+                  <input type="date" value={dueDateInput} onChange={(e) => setDueDateInput(e.target.value)} className={`w-full px-4 py-3 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                  {getNoHwWeekTestsForDate(dueDateInput, dueSelectedClassIds).length > 0 && (
+                    <div className="p-3 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-500 text-xs font-bold">
+                      Assessment Week Reminder: Test booked during this week!
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {classes.map((cls) => {
+                      const sel = dueSelectedClassIds.includes(cls.id);
+                      return (
+                        <button key={cls.id} type="button" onClick={() => setDueSelectedClassIds((p) => sel ? p.filter((x) => x !== cls.id) : [...p, cls.id])} className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border ${sel ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'bg-[#f4ede0] dark:bg-slate-800'}`}>{cls.name}</button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setShowScheduleDueModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold">Cancel</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-sm font-bold">Schedule</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* New Homework Check Modal */}
+          {showNewHwModal && currentClass && (
+            <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+              <div className={`w-full max-w-md rounded-3xl p-6 border shadow-2xl ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                <h3 className="text-lg font-extrabold mb-3">New Homework Check ({currentClass.name})</h3>
+                <form onSubmit={handleCreateHomework} className="space-y-4">
+                  <input type="text" value={newHwTitle} onChange={(e) => setNewHwTitle(e.target.value)} placeholder={`Home Learning ${currentClass.homeworks.length + 1}`} className={`w-full px-4 py-3 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} autoFocus />
+                  <input type="date" value={newHwDate} onChange={(e) => setNewHwDate(e.target.value)} className={`w-full px-4 py-3 rounded-xl border text-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-[#f4ede0] border-[#dcd0ba]'}`} />
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setShowNewHwModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold">Cancel</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-sm font-bold">Start Check</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Upload Spreadsheet Modal */}
+          {showUploadModal && (
+            <div className="fixed inset-0 z-[60] bg-black/65 flex items-center justify-center p-4 overflow-y-auto">
+              <div className={`w-full max-w-xl rounded-3xl p-6 border shadow-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-extrabold">Upload &amp; Refresh Spreadsheet</h3>
+                  <button type="button" onClick={() => setShowUploadModal(false)} className="p-2 rounded-xl bg-[#ede5d6] dark:bg-slate-800"><Icons.X className="w-4 h-4" /></button>
+                </div>
+                <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer bg-[#f4ede0] dark:bg-slate-800/40 border-[#d3c6b0] dark:border-slate-700">
+                  <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" onChange={handleSpreadsheetFileSelected} className="hidden" />
+                  <p className="text-sm font-extrabold">{isParsingFile ? 'Reading...' : uploadFileName || 'Tap to choose .xlsx, .xls or .csv file'}</p>
+                </div>
+                {uploadError && <p className="text-xs text-rose-600 font-bold mt-2">{uploadError}</p>}
+                {uploadedPreviewClasses && (
+                  <div className="mt-4 p-3 rounded-2xl bg-[#f4ede0] dark:bg-slate-800 text-xs font-bold">
+                    Detected {uploadedPreviewClasses.length} classes ({uploadedPreviewClasses.reduce((a, c) => a + c.pupils.length, 0)} pupils)
+                  </div>
+                )}
+                <div className="mt-5 flex justify-between items-center">
+                  <button type="button" onClick={handleDownloadTemplateCSV} className="px-3 py-2 rounded-xl bg-[#ede5d6] dark:bg-slate-800 text-xs font-bold">Download CSV Template</button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setShowUploadModal(false)} className="px-4 py-2 rounded-xl text-xs font-bold">Cancel</button>
+                    <button type="button" disabled={!uploadedPreviewClasses} onClick={applyUploadedSpreadsheet} className="px-5 py-2 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-xs font-extrabold disabled:opacity-40">Apply &amp; Refresh</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Bottom Navigation */}
+          <nav className={`sm:hidden fixed bottom-0 inset-x-0 z-30 border-t px-2 py-1.5 grid grid-cols-4 gap-1 ${darkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-[#fbf8f2]/95 border-[#e2d7c3]'}`}>
+            {[
+              { id: 'check', label: 'Check', IconComp: Icons.ClipboardCheck },
+              { id: 'grades', label: 'Grades', IconComp: Icons.Award },
+              { id: 'manage', label: 'Classes', IconComp: Icons.Users },
+              { id: 'settings', label: 'Settings', IconComp: Icons.Settings }
+            ].map(({ id, label, IconComp }) => (
+              <button key={id} type="button" onClick={() => setActiveTab(id)} className={`py-2 rounded-xl flex flex-col items-center gap-0.5 text-[11px] font-bold ${activeTab === id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'opacity-70'}`}>
+                <IconComp className="w-4 h-4" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
