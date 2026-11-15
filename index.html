@@ -91,43 +91,34 @@
       BellOff: (p) => <Icon {...p}><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></Icon>
     };
 
-    // --- INITIAL CLASSES DATA ---
+    // --- PRIVACY-SAFE GENERIC SAMPLE PUPILS GENERATOR ---
+    const SAMPLE_FORENAMES = [
+      'Oliver', 'Amelia', 'George', 'Isla', 'Noah', 'Ava', 'Arthur', 'Mia', 'Muhammad', 'Ivy',
+      'Leo', 'Florence', 'Harry', 'Lily', 'Oscar', 'Freya', 'Archie', 'Willow', 'Henry', 'Phoebe',
+      'Theo', 'Evie', 'Freddie', 'Sienna', 'Jack', 'Grace', 'Charlie', 'Poppy', 'Finley', 'Elsie', 'Lucas'
+    ];
+    const SAMPLE_SURNAMES = [
+      'Smith', 'Jones', 'Taylor', 'Brown', 'Williams', 'Wilson', 'Johnson', 'Davies', 'Robinson', 'Wright',
+      'Thompson', 'Evans', 'Walker', 'White', 'Roberts', 'Green', 'Hall', 'Wood', 'Jackson', 'Clarke',
+      'Patel', 'Khan', 'Lewis', 'James', 'Phillips', 'Mason', 'Mitchell', 'Rose', 'Davis', 'Rodriguez', 'Cox'
+    ];
+
+    function buildGenericPupils(prefix, count, tutorLabel = 'Form Teacher') {
+      return Array.from({ length: count }, (_, i) => ({
+        id: `${prefix}-${i + 1}`,
+        no: i + 1,
+        lastName: SAMPLE_SURNAMES[(i + prefix.length) % SAMPLE_SURNAMES.length],
+        firstName: SAMPLE_FORENAMES[(i * 3 + prefix.length) % SAMPLE_FORENAMES.length],
+        tutorGroup: tutorLabel
+      }));
+    }
+
+    // --- INITIAL CLASSES DATA (ANONYMISED WITH GENERIC NAMES & FORM TEACHER) ---
     const INITIAL_CLASSES = [
       {
         id: 'class-7b2',
         name: '7b2',
-        pupils: [
-          { id: '7b2-1', no: 1, lastName: 'Ali', firstName: 'Bareera', tutorGroup: '' },
-          { id: '7b2-2', no: 2, lastName: 'Alli', firstName: 'Charles', tutorGroup: '' },
-          { id: '7b2-3', no: 3, lastName: 'Bint-Akhtar', firstName: 'Sumayyah', tutorGroup: '' },
-          { id: '7b2-4', no: 4, lastName: 'Carr-Clarke', firstName: 'Archie', tutorGroup: '' },
-          { id: '7b2-5', no: 5, lastName: 'Chatterley', firstName: 'Poppy', tutorGroup: '' },
-          { id: '7b2-6', no: 6, lastName: 'Chaudry', firstName: 'Mustafa', tutorGroup: '' },
-          { id: '7b2-7', no: 7, lastName: 'Choudhury', firstName: 'Zaynab', tutorGroup: '' },
-          { id: '7b2-8', no: 8, lastName: 'Darwish', firstName: 'Yasin', tutorGroup: '' },
-          { id: '7b2-9', no: 9, lastName: 'Donaghy', firstName: 'Blaine', tutorGroup: '' },
-          { id: '7b2-10', no: 10, lastName: 'Gull', firstName: 'Zahran', tutorGroup: '' },
-          { id: '7b2-11', no: 11, lastName: 'Haris', firstName: 'Meerab', tutorGroup: '' },
-          { id: '7b2-12', no: 12, lastName: 'Ikponmwosa', firstName: 'Jobeth', tutorGroup: '' },
-          { id: '7b2-13', no: 13, lastName: 'Islam', firstName: 'Suhana', tutorGroup: '' },
-          { id: '7b2-14', no: 14, lastName: 'Mia', firstName: 'Rahim', tutorGroup: '' },
-          { id: '7b2-15', no: 15, lastName: 'Mihai', firstName: 'Daiana', tutorGroup: '' },
-          { id: '7b2-16', no: 16, lastName: 'Mir', firstName: 'Furqan', tutorGroup: '' },
-          { id: '7b2-17', no: 17, lastName: 'Mutuga', firstName: 'Briella', tutorGroup: '' },
-          { id: '7b2-18', no: 18, lastName: 'Omirin', firstName: 'Rotimi', tutorGroup: '' },
-          { id: '7b2-19', no: 19, lastName: 'Oyesanmi', firstName: 'Rebecca', tutorGroup: '' },
-          { id: '7b2-20', no: 20, lastName: 'Rabindranath', firstName: 'Aagasthy', tutorGroup: '' },
-          { id: '7b2-21', no: 21, lastName: 'Rahman', firstName: 'Adyan', tutorGroup: '' },
-          { id: '7b2-22', no: 22, lastName: 'Ranjha', firstName: 'Omer', tutorGroup: '' },
-          { id: '7b2-23', no: 23, lastName: 'Sarioglu', firstName: 'Isla', tutorGroup: '' },
-          { id: '7b2-24', no: 24, lastName: 'Schofield', firstName: 'Robyn', tutorGroup: '' },
-          { id: '7b2-25', no: 25, lastName: 'Talukder', firstName: 'Zarif', tutorGroup: '' },
-          { id: '7b2-26', no: 26, lastName: 'Topping', firstName: 'Ava', tutorGroup: '' },
-          { id: '7b2-27', no: 27, lastName: 'Ubogu', firstName: 'Urhukpe', tutorGroup: '' },
-          { id: '7b2-28', no: 28, lastName: 'Zahid', firstName: 'Hooria', tutorGroup: '' },
-          { id: '7b2-29', no: 29, lastName: 'Zaki', firstName: 'Aroosh', tutorGroup: '' },
-          { id: '7b2-30', no: 30, lastName: 'Zazai', firstName: 'Marwa', tutorGroup: '' }
-        ],
+        pupils: buildGenericPupils('7b2', 30, 'Form Teacher'),
         homeworks: [
           { id: 'hw-7b2-1', title: 'Home Learning 1', date: '2026-11-16', saved: false, completedIds: [] },
           { id: 'hw-7b2-2', title: 'Home Learning 2', date: '2026-11-23', saved: false, completedIds: [] }
@@ -136,32 +127,7 @@
       {
         id: 'class-8a3',
         name: '8a3',
-        pupils: [
-          { id: '8a3-1', no: 1, lastName: 'Adil-Awan', firstName: 'Ahad', tutorGroup: '8SAH' },
-          { id: '8a3-2', no: 2, lastName: 'Ajmal', firstName: 'Safaa', tutorGroup: '8EWI' },
-          { id: '8a3-3', no: 3, lastName: 'Akinola', firstName: 'Beauty', tutorGroup: '8ABA' },
-          { id: '8a3-4', no: 4, lastName: 'Ali', firstName: 'Hassan', tutorGroup: '8EWI' },
-          { id: '8a3-5', no: 5, lastName: 'Begum', firstName: 'Halima', tutorGroup: '8RJO/WTR' },
-          { id: '8a3-6', no: 6, lastName: 'Begum', firstName: 'Tahmina', tutorGroup: '8HIG' },
-          { id: '8a3-7', no: 7, lastName: 'Chadderton', firstName: 'Alfie', tutorGroup: '8SAH' },
-          { id: '8a3-8', no: 8, lastName: 'Chung', firstName: 'Ophelia', tutorGroup: '8RJO/WTR' },
-          { id: '8a3-9', no: 9, lastName: 'Dabbagh', firstName: 'Hassan', tutorGroup: '8BHO' },
-          { id: '8a3-10', no: 10, lastName: 'Han', firstName: 'Meng Ting', tutorGroup: '8RJO/WTR' },
-          { id: '8a3-11', no: 11, lastName: 'Iqbal', firstName: 'Aiza', tutorGroup: '8SHA' },
-          { id: '8a3-12', no: 12, lastName: 'Islam', firstName: 'Haneefa', tutorGroup: '8RJO/WTR' },
-          { id: '8a3-13', no: 13, lastName: 'Khan', firstName: 'Saara', tutorGroup: '8EWI' },
-          { id: '8a3-14', no: 14, lastName: 'Mahnoor', firstName: 'Safa', tutorGroup: '8SAH' },
-          { id: '8a3-15', no: 15, lastName: 'Mehmood Hamid', firstName: 'Zanab', tutorGroup: '8NHA' },
-          { id: '8a3-16', no: 16, lastName: 'Mohamed', firstName: 'Ilham', tutorGroup: '8ABA' },
-          { id: '8a3-17', no: 17, lastName: 'Monsur', firstName: 'Meher', tutorGroup: '8NHA' },
-          { id: '8a3-18', no: 18, lastName: 'Mustafa', firstName: 'Sophia', tutorGroup: '8BHO' },
-          { id: '8a3-19', no: 19, lastName: 'Rivera', firstName: 'Maggie', tutorGroup: '8NHA' },
-          { id: '8a3-20', no: 20, lastName: 'Shabir', firstName: 'Aima', tutorGroup: '8ABA' },
-          { id: '8a3-21', no: 21, lastName: 'Sikander', firstName: 'Aiza', tutorGroup: '8BHO' },
-          { id: '8a3-22', no: 22, lastName: 'Suleman', firstName: 'Mutahhar', tutorGroup: '8SAH' },
-          { id: '8a3-23', no: 23, lastName: 'Ur Rehman', firstName: 'Haris', tutorGroup: '8NHA' },
-          { id: '8a3-24', no: 24, lastName: 'Waters', firstName: 'Emmy', tutorGroup: '8SHA' }
-        ],
+        pupils: buildGenericPupils('8a3', 24, 'Form Teacher'),
         homeworks: [
           { id: 'hw-8a3-1', title: 'Home Learning 1', date: '2026-11-17', saved: false, completedIds: [] },
           { id: 'hw-8a3-2', title: 'Home Learning 2', date: '2026-11-24', saved: false, completedIds: [] }
@@ -170,33 +136,7 @@
       {
         id: 'class-8b4',
         name: '8b4',
-        pupils: [
-          { id: '8b4-1', no: 1, lastName: 'Abdeen', firstName: 'Zain', tutorGroup: '8RBY/DPE' },
-          { id: '8b4-2', no: 2, lastName: 'Alabi-Ayinde', firstName: 'Kudirat', tutorGroup: '8NHA' },
-          { id: '8b4-3', no: 3, lastName: 'Ali', firstName: 'Shabnam', tutorGroup: '8EWI' },
-          { id: '8b4-4', no: 4, lastName: 'Ali', firstName: 'Zahrah', tutorGroup: '8RJO/WTR' },
-          { id: '8b4-5', no: 5, lastName: 'Aslam', firstName: 'Seher', tutorGroup: '8BHO' },
-          { id: '8b4-6', no: 6, lastName: 'Beyene Kidane', firstName: 'Surafel', tutorGroup: '8SHA' },
-          { id: '8b4-7', no: 7, lastName: 'Ceesay', firstName: 'Isatou', tutorGroup: '8SAH' },
-          { id: '8b4-8', no: 8, lastName: 'Cosgrove', firstName: 'Bobbie-May', tutorGroup: '8RBY/DPE' },
-          { id: '8b4-9', no: 9, lastName: 'Durkin', firstName: 'Lily', tutorGroup: '8RBY/DPE' },
-          { id: '8b4-10', no: 10, lastName: 'Durojaye', firstName: 'Annabelle', tutorGroup: '8RJO/WTR' },
-          { id: '8b4-11', no: 11, lastName: 'Edionseri', firstName: 'Eliora', tutorGroup: '8SAH' },
-          { id: '8b4-12', no: 12, lastName: 'Hill-Patel', firstName: 'Grayson', tutorGroup: '8NHA' },
-          { id: '8b4-13', no: 13, lastName: 'Imran', firstName: 'Amara', tutorGroup: '8ABA' },
-          { id: '8b4-14', no: 14, lastName: 'Khatun', firstName: 'Anisha', tutorGroup: '8ABA' },
-          { id: '8b4-15', no: 15, lastName: 'Kousar', firstName: 'Batshah', tutorGroup: '8NHA' },
-          { id: '8b4-16', no: 16, lastName: 'Nishat', firstName: 'Tasnia', tutorGroup: '8RBY/DPE' },
-          { id: '8b4-17', no: 17, lastName: 'Noor', firstName: 'Hifza', tutorGroup: '8ABA' },
-          { id: '8b4-18', no: 18, lastName: 'Noor', firstName: 'Inayah', tutorGroup: '8NHA' },
-          { id: '8b4-19', no: 19, lastName: 'Omer', firstName: 'Zakariya', tutorGroup: '8HIG' },
-          { id: '8b4-20', no: 20, lastName: 'Ramsey', firstName: 'Max', tutorGroup: '8HIG' },
-          { id: '8b4-21', no: 21, lastName: 'Rashid', firstName: 'Hashim', tutorGroup: '8SAH' },
-          { id: '8b4-22', no: 22, lastName: 'Raza', firstName: 'Ali', tutorGroup: '8SHA' },
-          { id: '8b4-23', no: 23, lastName: 'Salabanzi', firstName: 'Kamarley', tutorGroup: '8HIG' },
-          { id: '8b4-24', no: 24, lastName: 'Shamas', firstName: 'Halima', tutorGroup: '8HIG' },
-          { id: '8b4-25', no: 25, lastName: 'Siddique', firstName: 'Abu-Bakr', tutorGroup: '8BHO' }
-        ],
+        pupils: buildGenericPupils('8b4', 25, 'Form Teacher'),
         homeworks: [
           {
             id: 'hw-8b4-1',
@@ -241,38 +181,7 @@
       {
         id: 'class-9a1',
         name: '9a1',
-        pupils: [
-          { id: '9a1-1', no: 1, lastName: 'Adebayo', firstName: 'Anu-Oluwapo Mabel', tutorGroup: '9ERO' },
-          { id: '9a1-2', no: 2, lastName: 'Adnan', firstName: 'Ibaad', tutorGroup: '9LGD' },
-          { id: '9a1-3', no: 3, lastName: 'Afolabi', firstName: 'Semilore', tutorGroup: '9PMA' },
-          { id: '9a1-4', no: 4, lastName: 'Ahmed', firstName: 'Khadijah', tutorGroup: '9LGD' },
-          { id: '9a1-5', no: 5, lastName: 'Ahsan', firstName: 'Muhammad', tutorGroup: '9JMO' },
-          { id: '9a1-6', no: 6, lastName: 'Ali', firstName: 'Shayaan', tutorGroup: '9JMO' },
-          { id: '9a1-7', no: 7, lastName: 'Ali', firstName: 'Tayiba', tutorGroup: '9CDE' },
-          { id: '9a1-8', no: 8, lastName: 'Arbey', firstName: 'Amara', tutorGroup: '9PMA' },
-          { id: '9a1-9', no: 9, lastName: 'Aslam', firstName: 'Umm-E-Habiba', tutorGroup: '9PMA' },
-          { id: '9a1-10', no: 10, lastName: 'Atkinson', firstName: 'Lewis', tutorGroup: '9JBA' },
-          { id: '9a1-11', no: 11, lastName: 'Chowdhury', firstName: 'Yasin', tutorGroup: '9JBA' },
-          { id: '9a1-12', no: 12, lastName: 'Debnath', firstName: 'Debarshi', tutorGroup: '9SMC' },
-          { id: '9a1-13', no: 13, lastName: 'Dosunmu', firstName: 'Eniade', tutorGroup: '9LLE/SHZ' },
-          { id: '9a1-14', no: 14, lastName: 'Heywood', firstName: 'Ryan', tutorGroup: '9JBA' },
-          { id: '9a1-15', no: 15, lastName: 'Hussain', firstName: 'Hammad', tutorGroup: '9SMC' },
-          { id: '9a1-16', no: 16, lastName: 'Ibrahim', firstName: 'Yameen', tutorGroup: '9PMA' },
-          { id: '9a1-17', no: 17, lastName: 'Islam', firstName: 'Mohammed Arman', tutorGroup: '9ERO' },
-          { id: '9a1-18', no: 18, lastName: 'Jinu', firstName: 'Alana', tutorGroup: '9LLE/SHZ' },
-          { id: '9a1-19', no: 19, lastName: 'Lees', firstName: 'Jakobe', tutorGroup: '9JMO' },
-          { id: '9a1-20', no: 20, lastName: 'Mccormick', firstName: 'Eric', tutorGroup: '9CDE' },
-          { id: '9a1-21', no: 21, lastName: 'Mehmood', firstName: 'Ismail', tutorGroup: '9LGD' },
-          { id: '9a1-22', no: 22, lastName: 'Miah', firstName: 'Mikayeel Mustafa', tutorGroup: '9LGD' },
-          { id: '9a1-23', no: 23, lastName: 'Nazir', firstName: 'Areeba', tutorGroup: '9PMA' },
-          { id: '9a1-24', no: 24, lastName: 'Noor', firstName: 'Azha', tutorGroup: '9CDE' },
-          { id: '9a1-25', no: 25, lastName: 'Ogbeide', firstName: 'Elliot', tutorGroup: '9PMA' },
-          { id: '9a1-26', no: 26, lastName: 'Okoli', firstName: 'Lilian', tutorGroup: '9JMO' },
-          { id: '9a1-27', no: 27, lastName: 'Rani', firstName: 'Tayyaba', tutorGroup: '9SMC' },
-          { id: '9a1-28', no: 28, lastName: 'Tehleel', firstName: 'Ahmad', tutorGroup: '9JBA' },
-          { id: '9a1-29', no: 29, lastName: 'Thomas Sony', firstName: 'David', tutorGroup: '9CDE' },
-          { id: '9a1-30', no: 30, lastName: 'Zak', firstName: 'Jan', tutorGroup: '9SMC' }
-        ],
+        pupils: buildGenericPupils('9a1', 30, 'Form Teacher'),
         homeworks: [
           { id: 'hw-9a1-1', title: 'Home Learning 1', date: '2026-11-19', saved: false, completedIds: [] },
           { id: 'hw-9a1-2', title: 'Home Learning 2', date: '2026-12-03', saved: false, completedIds: [] }
@@ -281,39 +190,7 @@
       {
         id: 'class-9b2',
         name: '9b2',
-        pupils: [
-          { id: '9b2-1', no: 1, lastName: 'Abbas', firstName: 'Aniqa', tutorGroup: '9BMA/NCA' },
-          { id: '9b2-2', no: 2, lastName: 'Adeyemo', firstName: 'Kenny', tutorGroup: '9ERO' },
-          { id: '9b2-3', no: 3, lastName: 'Aghaunor', firstName: 'Zina', tutorGroup: '9PMA' },
-          { id: '9b2-4', no: 4, lastName: 'Azam', firstName: 'Abdullah', tutorGroup: '9LLE/SHZ' },
-          { id: '9b2-5', no: 5, lastName: 'Bivol', firstName: 'Irina', tutorGroup: '9CDE' },
-          { id: '9b2-6', no: 6, lastName: 'Boucher', firstName: 'Jessiah', tutorGroup: '9SMC' },
-          { id: '9b2-7', no: 7, lastName: 'Choudhury', firstName: 'Mohammed Thaeemul', tutorGroup: '9SMC' },
-          { id: '9b2-8', no: 8, lastName: 'Eajaz', firstName: 'Aaban', tutorGroup: '9CDE' },
-          { id: '9b2-9', no: 9, lastName: 'Ferriss', firstName: 'Greyson', tutorGroup: '9SMC' },
-          { id: '9b2-10', no: 10, lastName: 'Hameed Bashir', firstName: 'Muhammad Yahya', tutorGroup: '9BMA/NCA' },
-          { id: '9b2-11', no: 11, lastName: 'Hassan', firstName: 'Ali', tutorGroup: '9SMC' },
-          { id: '9b2-12', no: 12, lastName: 'Inayah', firstName: 'Afseen', tutorGroup: '9ERO' },
-          { id: '9b2-13', no: 13, lastName: 'Iro', firstName: 'Zoey', tutorGroup: '9PMA' },
-          { id: '9b2-14', no: 14, lastName: 'Jaffri', firstName: 'Ayaanah', tutorGroup: '9CDE' },
-          { id: '9b2-15', no: 15, lastName: 'Khatun', firstName: 'Khadija', tutorGroup: '9JMO' },
-          { id: '9b2-16', no: 16, lastName: 'Khokhar', firstName: 'Yusuf', tutorGroup: '9BMA/NCA' },
-          { id: '9b2-17', no: 17, lastName: 'Latif', firstName: 'Aminah', tutorGroup: '9JMO' },
-          { id: '9b2-18', no: 18, lastName: 'MacFarlane', firstName: 'Harley', tutorGroup: '9ERO' },
-          { id: '9b2-19', no: 19, lastName: 'Miah', firstName: 'Alyssa Eliyah', tutorGroup: '9BMA/NCA' },
-          { id: '9b2-20', no: 20, lastName: 'Millett', firstName: 'Emilie', tutorGroup: '9BMA/NCA' },
-          { id: '9b2-21', no: 21, lastName: 'Naz', firstName: 'Haajra Noor', tutorGroup: '9SMC' },
-          { id: '9b2-22', no: 22, lastName: 'Needham', firstName: 'Lucas', tutorGroup: '9LGD' },
-          { id: '9b2-23', no: 23, lastName: 'Obaro', firstName: 'Jonathan', tutorGroup: '9JBA' },
-          { id: '9b2-24', no: 24, lastName: 'Perrin', firstName: 'Beth', tutorGroup: '9ERO' },
-          { id: '9b2-25', no: 25, lastName: 'Pinzariu', firstName: 'Dominic', tutorGroup: '9BMA/NCA' },
-          { id: '9b2-26', no: 26, lastName: 'Rashid', firstName: 'Umaiza', tutorGroup: '9LGD' },
-          { id: '9b2-27', no: 27, lastName: 'Sarder', firstName: 'Nahin', tutorGroup: '9BMA/NCA' },
-          { id: '9b2-28', no: 28, lastName: 'Thwaites', firstName: 'Daniel', tutorGroup: '9ERO' },
-          { id: '9b2-29', no: 29, lastName: 'Tuz Zahra', firstName: 'Fatima', tutorGroup: '9LLE/SHZ' },
-          { id: '9b2-30', no: 30, lastName: 'Zeb', firstName: 'Safiyyah', tutorGroup: '9ERO' },
-          { id: '9b2-31', no: 31, lastName: 'Zeeshan', firstName: 'Zain', tutorGroup: '9SMC' }
-        ],
+        pupils: buildGenericPupils('9b2', 31, 'Form Teacher'),
         homeworks: [
           { id: 'hw-9b2-1', title: 'Home Learning 1', date: '2026-11-20', saved: false, completedIds: [] },
           { id: 'hw-9b2-2', title: 'Home Learning 2', date: '2026-12-04', saved: false, completedIds: [] }
@@ -322,25 +199,7 @@
       {
         id: 'class-9ATe',
         name: '9ATe',
-        pupils: [
-          { id: '9ate-1', no: 1, lastName: 'Ahmed', firstName: 'Yameen', tutorGroup: '9LLE/SHZ' },
-          { id: '9ate-2', no: 2, lastName: 'Ahsan', firstName: 'Muhammad', tutorGroup: '9JMO' },
-          { id: '9ate-3', no: 3, lastName: 'Ali', firstName: 'Zakariyya', tutorGroup: '9PMA' },
-          { id: '9ate-4', no: 4, lastName: 'Ashraf', firstName: 'Aamirah', tutorGroup: '9LGD' },
-          { id: '9ate-5', no: 5, lastName: 'Aslam', firstName: 'Umm-E-Habiba', tutorGroup: '9PMA' },
-          { id: '9ate-6', no: 6, lastName: 'Bashir', firstName: 'Sufyan', tutorGroup: '9CDE' },
-          { id: '9ate-7', no: 7, lastName: 'Debnath', firstName: 'Debarshi', tutorGroup: '9SMC' },
-          { id: '9ate-8', no: 8, lastName: 'Gardener', firstName: 'Eden', tutorGroup: '9JMO' },
-          { id: '9ate-9', no: 9, lastName: 'Harvey', firstName: 'Sabrina', tutorGroup: '9JMO' },
-          { id: '9ate-10', no: 10, lastName: 'Hashmi', firstName: 'Ismail', tutorGroup: '9JMO' },
-          { id: '9ate-11', no: 11, lastName: 'Ibrahim', firstName: 'Yameen', tutorGroup: '9PMA' },
-          { id: '9ate-12', no: 12, lastName: 'Islam', firstName: 'Mohammed Arman', tutorGroup: '9ERO' },
-          { id: '9ate-13', no: 13, lastName: 'Mahmood', firstName: 'Mohammed Saif', tutorGroup: '9ERO' },
-          { id: '9ate-14', no: 14, lastName: 'Miah', firstName: 'Mikayeel Mustafa', tutorGroup: '9LGD' },
-          { id: '9ate-15', no: 15, lastName: 'Odedeji', firstName: 'Peculiar', tutorGroup: '9LGD' },
-          { id: '9ate-16', no: 16, lastName: 'Parker', firstName: 'Cassidy', tutorGroup: '9LGD' },
-          { id: '9ate-17', no: 17, lastName: 'Rahman', firstName: 'Afreen', tutorGroup: '9CDE' }
-        ],
+        pupils: buildGenericPupils('9ate', 17, 'Form Teacher'),
         homeworks: [
           { id: 'hw-9ate-1', title: 'Home Learning 1', date: '2026-11-25', saved: false, completedIds: [] }
         ]
@@ -348,37 +207,7 @@
       {
         id: 'class-10x2',
         name: '10x2',
-        pupils: [
-          { id: '10x2-1', no: 1, lastName: 'Afzaal', firstName: 'Jannat', tutorGroup: '10CWI' },
-          { id: '10x2-2', no: 2, lastName: 'Ahmed', firstName: 'Hafsah', tutorGroup: '10LHO' },
-          { id: '10x2-3', no: 3, lastName: 'Ahmed', firstName: 'Ijtiba', tutorGroup: '10LHO' },
-          { id: '10x2-4', no: 4, lastName: 'Akhtar', firstName: 'Aliza', tutorGroup: '10LMC' },
-          { id: '10x2-5', no: 5, lastName: 'Akhtar', firstName: 'Faizaan', tutorGroup: '10AHA' },
-          { id: '10x2-6', no: 6, lastName: 'Ali', firstName: 'Laibah', tutorGroup: '10EDE/KLU' },
-          { id: '10x2-7', no: 7, lastName: 'Armstrong', firstName: 'Tyler', tutorGroup: '10AHA' },
-          { id: '10x2-8', no: 8, lastName: 'Awolesi', firstName: 'Claudia', tutorGroup: '10LHO' },
-          { id: '10x2-9', no: 9, lastName: 'Bergin', firstName: 'Autumn', tutorGroup: '10MAL' },
-          { id: '10x2-10', no: 10, lastName: 'Chowdhury', firstName: 'Mariam', tutorGroup: '10EDE/KLU' },
-          { id: '10x2-11', no: 11, lastName: 'Ellahi', firstName: 'Sameen', tutorGroup: '10AHA' },
-          { id: '10x2-12', no: 12, lastName: 'Hussain', firstName: 'Anniyah', tutorGroup: '10RMA/ABL' },
-          { id: '10x2-13', no: 13, lastName: 'Hussain', firstName: 'Hafsa', tutorGroup: '10RMA/ABL' },
-          { id: '10x2-14', no: 14, lastName: 'Imran', firstName: 'Inayah', tutorGroup: '10EDE/KLU' },
-          { id: '10x2-15', no: 15, lastName: 'Islam', firstName: 'Ibrahim', tutorGroup: '10AHA' },
-          { id: '10x2-16', no: 16, lastName: 'Javed', firstName: 'Aysha', tutorGroup: '10HRI' },
-          { id: '10x2-17', no: 17, lastName: 'Jenner', firstName: 'Delilah', tutorGroup: '10LHO' },
-          { id: '10x2-18', no: 18, lastName: 'Jilani', firstName: 'Shahjalal', tutorGroup: '10LMC' },
-          { id: '10x2-19', no: 19, lastName: 'Lam', firstName: 'Erin', tutorGroup: '10AHA' },
-          { id: '10x2-20', no: 20, lastName: 'Mahmood', firstName: 'Nureen', tutorGroup: '10RMA/ABL' },
-          { id: '10x2-21', no: 21, lastName: 'Mayberry-Walker', firstName: 'Evie', tutorGroup: '10HRI' },
-          { id: '10x2-22', no: 22, lastName: 'Naeem', firstName: 'Najeeha', tutorGroup: '10LMC' },
-          { id: '10x2-23', no: 23, lastName: 'Oladipupo', firstName: 'Abdul Malik', tutorGroup: '10MAL' },
-          { id: '10x2-24', no: 24, lastName: 'Sadiq', firstName: 'Azaan', tutorGroup: '10EDE/KLU' },
-          { id: '10x2-25', no: 25, lastName: 'Saqib', firstName: 'Haadin', tutorGroup: '10EDE/KLU' },
-          { id: '10x2-26', no: 26, lastName: 'Sibanda', firstName: 'Leanne', tutorGroup: '10AHA' },
-          { id: '10x2-27', no: 27, lastName: 'Visram', firstName: 'Sianna', tutorGroup: '10HRI' },
-          { id: '10x2-28', no: 28, lastName: 'Wajid', firstName: 'Hibah', tutorGroup: '10AHA' },
-          { id: '10x2-29', no: 29, lastName: 'Yaaseen', firstName: 'Adam', tutorGroup: '10MAL' }
-        ],
+        pupils: buildGenericPupils('10x2', 29, 'Form Teacher'),
         homeworks: [
           { id: 'hw-10x2-1', title: 'Atomic Structure Revision', date: '2026-11-26', saved: false, completedIds: [] },
           { id: 'hw-10x2-2', title: 'GCSE Practice Questions', date: '2026-12-10', saved: false, completedIds: [] }
@@ -387,18 +216,7 @@
       {
         id: 'class-11rev',
         name: '11 Revision',
-        pupils: [
-          { id: '11r-1', no: 1, lastName: 'Yassin', firstName: 'Ibrahim', tutorGroup: 'Yr 11' },
-          { id: '11r-2', no: 2, lastName: 'Yasin', firstName: 'Safa', tutorGroup: 'Yr 11' },
-          { id: '11r-3', no: 3, lastName: 'Chowdury', firstName: 'Zahra', tutorGroup: 'Yr 11' },
-          { id: '11r-4', no: 4, lastName: 'Yu', firstName: 'Samantha', tutorGroup: 'Yr 11' },
-          { id: '11r-5', no: 5, lastName: 'Quadir', firstName: 'Anaya', tutorGroup: 'Yr 11' },
-          { id: '11r-6', no: 6, lastName: 'Subhani', firstName: 'Hafsa', tutorGroup: 'Yr 11' },
-          { id: '11r-7', no: 7, lastName: 'Obamedo', firstName: 'Vincent', tutorGroup: 'Yr 11' },
-          { id: '11r-8', no: 8, lastName: 'Ahmed', firstName: 'Isa', tutorGroup: 'Yr 11' },
-          { id: '11r-9', no: 9, lastName: 'Zeeshan', firstName: 'Haider', tutorGroup: 'Yr 11' },
-          { id: '11r-10', no: 10, lastName: 'Heshmatpour', firstName: 'Pouya', tutorGroup: 'Yr 11' }
-        ],
+        pupils: buildGenericPupils('11r', 10, 'Form Teacher'),
         homeworks: [
           { id: 'hw-11r-1', title: 'Session 28 Sept', date: '2026-09-28', saved: true, completedIds: ['11r-1', '11r-2', '11r-3'] },
           { id: 'hw-11r-2', title: 'Session 05 Oct', date: '2026-10-05', saved: true, completedIds: ['11r-4', '11r-5', '11r-6', '11r-7', '11r-8', '11r-9', '11r-10'] },
@@ -666,7 +484,9 @@
 
       const [classes, setClasses] = useState(() => {
         try {
-          const s = localStorage.getItem('hw_tracker_classes_v3');
+          localStorage.removeItem('hw_tracker_classes_v3');
+          localStorage.removeItem('hw_tracker_classes_v4_generic');
+          const s = localStorage.getItem('hw_tracker_classes_v5_anon');
           return s ? JSON.parse(s) : INITIAL_CLASSES;
         } catch { return INITIAL_CLASSES; }
       });
@@ -745,7 +565,7 @@
         return () => document.removeEventListener('mousedown', handleClickOutside);
       }, [menuOpen]);
 
-      useEffect(() => { localStorage.setItem('hw_tracker_classes_v3', JSON.stringify(classes)); }, [classes]);
+      useEffect(() => { localStorage.setItem('hw_tracker_classes_v5_anon', JSON.stringify(classes)); }, [classes]);
       useEffect(() => { localStorage.setItem('hw_tracker_tests_v1', JSON.stringify(tests)); }, [tests]);
       useEffect(() => { localStorage.setItem('hw_tracker_selected_class', selectedClassId); }, [selectedClassId]);
       useEffect(() => { localStorage.setItem('hw_tracker_password', savedPassword); setPasswordInputField(savedPassword); }, [savedPassword]);
@@ -1196,7 +1016,7 @@
       };
 
       const handleDownloadTemplateCSV = () => {
-        const csv = 'No.,Last Name,First Name,Tutor Group,Task\n,,,,Date\n1,Ali,Bareera,7SAH,\n2,Alli,Charles,7EWI,';
+        const csv = 'No.,Last Name,First Name,Tutor Group,Task\n,,,,Date\n1,Smith,Oliver,Form Teacher,\n2,Jones,Amelia,Form Teacher,';
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
