@@ -88,7 +88,8 @@
       Type: (p) => <Icon {...p}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></Icon>,
       Menu: (p) => <Icon {...p}><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></Icon>,
       GraduationCap: (p) => <Icon {...p}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></Icon>,
-      BellOff: (p) => <Icon {...p}><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></Icon>
+      BellOff: (p) => <Icon {...p}><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></Icon>,
+      Cloud: (p) => <Icon {...p}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></Icon>
     };
 
     // --- PRIVACY-SAFE GENERIC SAMPLE PUPILS GENERATOR ---
@@ -533,8 +534,6 @@
       const [newPupilFirstName, setNewPupilFirstName] = useState('');
       const [newPupilLastName, setNewPupilLastName] = useState('');
       const [newPupilTutorGroup, setNewPupilTutorGroup] = useState('');
-      const [bulkImportText, setBulkImportText] = useState('');
-      const [showBulkImport, setShowBulkImport] = useState(false);
 
       const [showUploadModal, setShowUploadModal] = useState(false);
       const [uploadFileName, setUploadFileName] = useState('');
@@ -549,12 +548,148 @@
       const [passwordInputField, setPasswordInputField] = useState(savedPassword);
       const [showPasscodeChars, setShowPasscodeChars] = useState(false);
 
+      // --- CROSS-DEVICE CLOUD SYNC & BACKUP STATE (FOR GITHUB PAGES) ---
+      const [showSyncModal, setShowSyncModal] = useState(false);
+      const [cloudSyncId, setCloudSyncId] = useState(() => localStorage.getItem('hw_tracker_cloud_id') || '');
+      const [cloudSyncInput, setCloudSyncInput] = useState(() => localStorage.getItem('hw_tracker_cloud_id') || '');
+      const [cloudStatus, setCloudStatus] = useState('local');
+      const [lastCloudSync, setLastCloudSync] = useState('');
+      const backupFileInputRef = useRef(null);
+      const isApplyingCloudRef = useRef(false);
+
       const [toast, setToast] = useState(null);
       const [confirmDialog, setConfirmDialog] = useState(null);
 
       const showToast = (message, type = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast((prev) => (prev && prev.message === message ? null : prev)), 3500);
+      };
+
+      // --- CLOUD PULL & AUTO-PUSH WHEN TEACHER HAS A CLOUD SYNC ID ---
+      const pullFromCloudId = async (syncId, silent = false) => {
+        if (!syncId) return;
+        const cleanKey = syncId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+        try {
+          setCloudStatus('syncing');
+          const res = await fetch(`https://kvdb.io/A9x7kP3mQ8vR2wL5nJ4tY/${encodeURIComponent(cleanKey)}`, {
+            method: 'GET',
+            cache: 'no-store'
+          });
+          if (res.status === 404) {
+            throw new Error('Sync code not found');
+          }
+          if (!res.ok) throw new Error('Sync fetch failed');
+          const data = await res.json();
+          isApplyingCloudRef.current = true;
+          if (Array.isArray(data.classes) && data.classes.length > 0) setClasses(data.classes);
+          if (Array.isArray(data.tests)) setTests(data.tests);
+          if (data.selectedClassId) setSelectedClassId(data.selectedClassId);
+          if (data.a11y) setA11y((prev) => ({ ...prev, ...data.a11y }));
+          setCloudStatus('synced');
+          setLastCloudSync(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          if (!silent) showToast('Synced latest tracker data from cloud!');
+          setTimeout(() => { isApplyingCloudRef.current = false; }, 300);
+        } catch (err) {
+          setCloudStatus('error');
+          if (!silent) showToast('Could not connect to that Sync Code. Check the code or use Backup File.', 'error');
+        }
+      };
+
+      const pushToCloudId = async (syncId, payload) => {
+        if (!syncId || isApplyingCloudRef.current) return false;
+        const cleanKey = syncId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+        try {
+          setCloudStatus('syncing');
+          const res = await fetch(`https://kvdb.io/A9x7kP3mQ8vR2wL5nJ4tY/${encodeURIComponent(cleanKey)}`, {
+            method: 'POST',
+            body: JSON.stringify({ ...payload, updatedAt: Date.now() })
+          });
+          if (!res.ok) throw new Error('Push failed');
+          setCloudStatus('synced');
+          setLastCloudSync(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          return true;
+        } catch {
+          setCloudStatus('error');
+          return false;
+        }
+      };
+
+      const handleCreateNewCloudSyncCode = async () => {
+        const newId = `hlt-${Math.random().toString(36).slice(2, 6)}-${Math.random().toString(36).slice(2, 6)}`;
+        const ok = await pushToCloudId(newId, { classes, tests, selectedClassId, a11y });
+        if (ok) {
+          localStorage.setItem('hw_tracker_cloud_id', newId);
+          setCloudSyncId(newId);
+          setCloudSyncInput(newId);
+          showToast(`Personal Sync Code "${newId}" created! Enter this code on your other devices.`);
+        } else {
+          showToast('Cloud sync is blocked on this network. You can use Download / Restore Backup below.', 'error');
+        }
+      };
+
+      const handleConnectExistingSyncCode = async (e) => {
+        e.preventDefault();
+        const clean = cloudSyncInput.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+        if (!clean) return;
+        localStorage.setItem('hw_tracker_cloud_id', clean);
+        setCloudSyncId(clean);
+        setCloudSyncInput(clean);
+        await pullFromCloudId(clean, false);
+      };
+
+      const handleDisconnectCloudSync = () => {
+        localStorage.removeItem('hw_tracker_cloud_id');
+        setCloudSyncId('');
+        setCloudSyncInput('');
+        setCloudStatus('local');
+        setLastCloudSync('');
+        showToast('Disconnected cloud sync on this device.');
+      };
+
+      useEffect(() => {
+        if (cloudSyncId) {
+          pullFromCloudId(cloudSyncId, true);
+        }
+      }, [cloudSyncId]);
+
+      useEffect(() => {
+        if (!cloudSyncId || isApplyingCloudRef.current) return;
+        const t = setTimeout(() => {
+          pushToCloudId(cloudSyncId, { classes, tests, selectedClassId, a11y });
+        }, 700);
+        return () => clearTimeout(t);
+      }, [classes, tests, selectedClassId, a11y, cloudSyncId]);
+
+      const handleExportBackupJSON = () => {
+        const backup = { version: 5, exportedAt: new Date().toISOString(), classes, tests, selectedClassId, a11y };
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Home_Learning_Tracker_Backup_${getTodayISO()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Tracker backup file downloaded!');
+      };
+
+      const handleImportBackupJSON = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          if (!Array.isArray(data.classes)) throw new Error('Invalid backup file');
+          setClasses(data.classes);
+          if (Array.isArray(data.tests)) setTests(data.tests);
+          if (data.selectedClassId) setSelectedClassId(data.selectedClassId);
+          if (data.a11y) setA11y((prev) => ({ ...prev, ...data.a11y }));
+          setShowSyncModal(false);
+          showToast('Tracker restored from backup file!');
+        } catch {
+          showToast('Invalid backup file.', 'error');
+        } finally {
+          if (backupFileInputRef.current) backupFileInputRef.current.value = '';
+        }
       };
 
       useEffect(() => {
@@ -1245,7 +1380,7 @@
             </div>
           )}
 
-          {/* Header with Title & Three-Line Menu */}
+          {/* Top Sticky Header */}
           <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-[#fbf8f2]/95 border-[#e2d7c3]'}`}>
             <div className="max-w-[1440px] mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
@@ -1255,41 +1390,73 @@
                 <h1 className="text-lg sm:text-xl font-extrabold tracking-tight truncate">The home learning tracker</h1>
               </div>
 
-              <div className="relative" ref={menuRef}>
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setMenuOpen((p) => !p)}
-                  className={`p-2.5 rounded-2xl border transition ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-[#f2ebe0] border-[#ded2bd] text-[#2c251d]'}`}
-                  aria-label="Open menu"
+                  onClick={() => setShowSyncModal(true)}
+                  className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition ${
+                    cloudSyncId && cloudStatus === 'synced'
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/25'
+                      : cloudStatus === 'error'
+                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300'
+                      : darkMode
+                      ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                      : 'bg-[#f2ebe0] border-[#ded2bd] text-[#2c251d] hover:bg-[#e7dcc8]'
+                  }`}
+                  title="Sync across Phone, Tablet & Desktop"
                 >
-                  {menuOpen ? <Icons.X className="w-5 h-5" /> : <Icons.Menu className="w-5 h-5" />}
+                  <Icons.Cloud className={`w-4 h-4 ${cloudStatus === 'syncing' ? 'animate-pulse' : ''}`} />
+                  <span>
+                    {cloudSyncId
+                      ? cloudStatus === 'syncing'
+                        ? 'Syncing...'
+                        : cloudStatus === 'error'
+                        ? 'Sync Retry'
+                        : 'Synced'
+                      : 'Sync Devices'}
+                  </span>
                 </button>
 
-                {menuOpen && (
-                  <div className={`absolute right-0 mt-2 w-64 rounded-2xl shadow-2xl border py-2 z-50 ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-[#fbf8f2] border-[#dcd0ba] text-[#2c251d]'}`}>
-                    <button type="button" onClick={() => { setMenuOpen(false); setShowUploadModal(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
-                      <Icons.Upload className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
-                      <span>Upload Spreadsheet</span>
-                    </button>
-                    <button type="button" onClick={() => { setMenuOpen(false); setShowSettingsModal(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
-                      <Icons.Sliders className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
-                      <span>Settings &amp; Accessibility</span>
-                    </button>
-                    <button type="button" onClick={() => { setMenuOpen(false); setMobileCalendarDrawerOpen(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800 xl:hidden">
-                      <Icons.Calendar className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
-                      <span>Schedule &amp; Tests</span>
-                    </button>
-                    <div className="my-1 border-t border-[#e5dccb] dark:border-slate-800" />
-                    <button type="button" onClick={() => { setDarkMode(!darkMode); setMenuOpen(false); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
-                      {darkMode ? <Icons.Sun className="w-4 h-4 text-amber-400" /> : <Icons.Moon className="w-4 h-4" />}
-                      <span>{darkMode ? 'Cream Light Mode' : 'Dark Mode'}</span>
-                    </button>
-                    <button type="button" onClick={handleLockNow} className="w-full px-4 py-3 text-left text-sm font-bold text-rose-600 flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
-                      <Icons.Lock className="w-4 h-4" />
-                      <span>Lock Tracker Now</span>
-                    </button>
-                  </div>
-                )}
+                <div className="relative" ref={menuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((p) => !p)}
+                    className={`p-2.5 rounded-2xl border transition ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-[#f2ebe0] border-[#ded2bd] text-[#2c251d]'}`}
+                    aria-label="Open menu"
+                  >
+                    {menuOpen ? <Icons.X className="w-5 h-5" /> : <Icons.Menu className="w-5 h-5" />}
+                  </button>
+
+                  {menuOpen && (
+                    <div className={`absolute right-0 mt-2 w-64 rounded-2xl shadow-2xl border py-2 z-50 ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-[#fbf8f2] border-[#dcd0ba] text-[#2c251d]'}`}>
+                      <button type="button" onClick={() => { setMenuOpen(false); setShowSyncModal(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                        <Icons.Cloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                        <span>Sync / Transfer Devices</span>
+                      </button>
+                      <button type="button" onClick={() => { setMenuOpen(false); setShowUploadModal(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                        <Icons.Upload className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
+                        <span>Upload Spreadsheet</span>
+                      </button>
+                      <button type="button" onClick={() => { setMenuOpen(false); setShowSettingsModal(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                        <Icons.Sliders className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
+                        <span>Settings &amp; Accessibility</span>
+                      </button>
+                      <button type="button" onClick={() => { setMenuOpen(false); setMobileCalendarDrawerOpen(true); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800 xl:hidden">
+                        <Icons.Calendar className="w-4 h-4 text-amber-800 dark:text-indigo-400" />
+                        <span>Schedule &amp; Tests</span>
+                      </button>
+                      <div className="my-1 border-t border-[#e5dccb] dark:border-slate-800" />
+                      <button type="button" onClick={() => { setDarkMode(!darkMode); setMenuOpen(false); }} className="w-full px-4 py-3 text-left text-sm font-bold flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                        {darkMode ? <Icons.Sun className="w-4 h-4 text-amber-400" /> : <Icons.Moon className="w-4 h-4" />}
+                        <span>{darkMode ? 'Cream Light Mode' : 'Dark Mode'}</span>
+                      </button>
+                      <button type="button" onClick={handleLockNow} className="w-full px-4 py-3 text-left text-sm font-bold text-rose-600 flex items-center gap-3 hover:bg-[#f0e8d9] dark:hover:bg-slate-800">
+                        <Icons.Lock className="w-4 h-4" />
+                        <span>Lock Tracker Now</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1762,20 +1929,25 @@
             <div className="fixed inset-0 z-[60] bg-black/65 flex items-center justify-center p-4 overflow-y-auto">
               <div className={`w-full max-w-xl rounded-3xl p-6 border shadow-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-extrabold">Upload &amp; Refresh Spreadsheet</h3>
+                  <h3 className="text-lg font-extrabold">Upload Spreadsheet (.xlsx, .xls, .csv)</h3>
                   <button type="button" onClick={() => setShowUploadModal(false)} className="p-2 rounded-xl bg-[#ede5d6] dark:bg-slate-800"><Icons.X className="w-4 h-4" /></button>
                 </div>
-                <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer bg-[#f4ede0] dark:bg-slate-800/40 border-[#d3c6b0] dark:border-slate-700">
+                <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-[#d3c6b0] dark:border-slate-700 rounded-2xl p-6 text-center cursor-pointer bg-[#f4ede0] dark:bg-slate-800/40">
                   <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" onChange={handleSpreadsheetFileSelected} className="hidden" />
-                  <p className="text-sm font-extrabold">{isParsingFile ? 'Reading...' : uploadFileName || 'Tap to choose .xlsx, .xls or .csv file'}</p>
+                  <Icons.Upload className="w-8 h-8 mx-auto mb-2 text-amber-900 dark:text-indigo-400" />
+                  <p className="text-sm font-extrabold">{isParsingFile ? 'Reading spreadsheet...' : uploadFileName || 'Tap to choose spreadsheet file'}</p>
                 </div>
-                {uploadError && <p className="text-xs text-rose-600 font-bold mt-2">{uploadError}</p>}
-                {uploadedPreviewClasses && (
-                  <div className="mt-4 p-3 rounded-2xl bg-[#f4ede0] dark:bg-slate-800 text-xs font-bold">
-                    Detected {uploadedPreviewClasses.length} classes ({uploadedPreviewClasses.reduce((a, c) => a + c.pupils.length, 0)} pupils)
-                  </div>
-                )}
-                <div className="mt-5 flex justify-between items-center">
+                {uploadError && <p className="text-rose-600 text-xs font-bold mt-2">{uploadError}</p>}
+                <div className="grid grid-cols-3 gap-2 mt-4">
+                  {[
+                    { id: 'merge', title: 'Merge & Refresh' },
+                    { id: 'replace', title: 'Replace All' },
+                    { id: 'current', title: 'Current Class' }
+                  ].map((m) => (
+                    <button key={m.id} type="button" onClick={() => setUploadMode(m.id)} className={`p-2.5 rounded-xl border text-xs font-extrabold ${uploadMode === m.id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'bg-[#f4ede0] dark:bg-slate-800'}`}>{m.title}</button>
+                  ))}
+                </div>
+                <div className="mt-5 flex items-center justify-between">
                   <button type="button" onClick={handleDownloadTemplateCSV} className="px-3 py-2 rounded-xl bg-[#ede5d6] dark:bg-slate-800 text-xs font-bold">Download CSV Template</button>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setShowUploadModal(false)} className="px-4 py-2 rounded-xl text-xs font-bold">Cancel</button>
@@ -1786,15 +1958,118 @@
             </div>
           )}
 
+          {/* Cross-Device Sync & Backup Modal */}
+          {showSyncModal && (
+            <div className="fixed inset-0 z-[60] bg-black/65 flex items-center justify-center p-4 overflow-y-auto">
+              <div className={`w-full max-w-lg rounded-3xl p-6 border shadow-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center">
+                      <Icons.Cloud className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-extrabold leading-tight">Sync Across Phone, Tablet &amp; PC</h3>
+                      <p className="text-xs opacity-75">Each teacher gets their own private Sync Code</p>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setShowSyncModal(false)} className="p-2 rounded-xl bg-[#ede5d6] dark:bg-slate-800"><Icons.X className="w-4 h-4" /></button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-3">
+                    <p className="text-xs font-bold">
+                      1. Automatic Cloud Sync (Phone ↔ Tablet ↔ Desktop)
+                    </p>
+                    <p className="text-[11px] opacity-80">
+                      Click <strong>Generate My Sync Code</strong> on your first device, then paste that same code into your phone, tablet, or classroom PC. Every homework check will stay in sync automatically!
+                    </p>
+
+                    {!cloudSyncId ? (
+                      <button
+                        type="button"
+                        onClick={handleCreateNewCloudSyncCode}
+                        disabled={cloudStatus === 'syncing'}
+                        className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-extrabold shadow"
+                      >
+                        {cloudStatus === 'syncing' ? 'Creating Sync Code...' : '+ Generate My Personal Sync Code'}
+                      </button>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-xs flex items-center justify-between gap-2">
+                        <div>
+                          <span className="font-bold block text-[10px] uppercase opacity-75">Your Active Sync Code:</span>
+                          <code className="font-mono font-extrabold text-sm select-all">{cloudSyncId}</code>
+                          {lastCloudSync && <span className="block text-[10px] opacity-75 mt-0.5">Last synced: {lastCloudSync}</span>}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => pullFromCloudId(cloudSyncId, false)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                          >
+                            Sync Now
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDisconnectCloudSync}
+                            className="px-2.5 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:text-rose-600 font-bold text-xs"
+                            title="Unlink Sync Code"
+                          >
+                            Unlink
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleConnectExistingSyncCode} className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={cloudSyncInput}
+                        onChange={(e) => setCloudSyncInput(e.target.value)}
+                        placeholder="Or paste existing Sync Code here..."
+                        className={`flex-1 px-3 py-2 rounded-xl border text-xs font-mono ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-[#fbf8f2] border-[#dcd0ba]'}`}
+                      />
+                      <button type="submit" className="px-4 py-2 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-xs font-bold">
+                        Link Device
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-2.5">
+                    <p className="text-xs font-bold">2. Manual Backup File (Download / Restore)</p>
+                    <p className="text-[11px] opacity-80">
+                      Save a backup copy of all your classes and homework checks to your device or school drive anytime.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={handleExportBackupJSON} className="flex-1 py-2.5 px-3 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-xs font-bold flex items-center justify-center gap-1.5">
+                        <Icons.Download className="w-4 h-4" />
+                        <span>Download Backup</span>
+                      </button>
+                      <button type="button" onClick={() => backupFileInputRef.current?.click()} className="flex-1 py-2.5 px-3 rounded-xl border border-[#cbbba0] dark:border-slate-600 text-xs font-bold flex items-center justify-center gap-1.5">
+                        <Icons.Upload className="w-4 h-4" />
+                        <span>Restore Backup</span>
+                      </button>
+                      <input ref={backupFileInputRef} type="file" accept=".json" onChange={handleImportBackupJSON} className="hidden" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Mobile Bottom Navigation */}
-          <nav className={`sm:hidden fixed bottom-0 inset-x-0 z-30 border-t px-2 py-1.5 grid grid-cols-4 gap-1 ${darkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-[#fbf8f2]/95 border-[#e2d7c3]'}`}>
+          <nav className={`sm:hidden fixed bottom-0 inset-x-0 z-30 border-t backdrop-blur-md px-2 py-1.5 grid grid-cols-4 gap-1 ${darkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-[#fbf8f2]/95 border-[#e2d7c3]'}`}>
             {[
               { id: 'check', label: 'Check', IconComp: Icons.ClipboardCheck },
               { id: 'grades', label: 'Grades', IconComp: Icons.Award },
               { id: 'manage', label: 'Classes', IconComp: Icons.Users },
               { id: 'settings', label: 'Settings', IconComp: Icons.Settings }
             ].map(({ id, label, IconComp }) => (
-              <button key={id} type="button" onClick={() => setActiveTab(id)} className={`py-2 rounded-xl flex flex-col items-center gap-0.5 text-[11px] font-bold ${activeTab === id ? 'bg-stone-800 dark:bg-indigo-600 text-white' : 'opacity-70'}`}>
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold ${activeTab === id ? 'bg-stone-800 dark:bg-indigo-600 text-amber-50 dark:text-white' : 'opacity-70'}`}
+              >
                 <IconComp className="w-4 h-4" />
                 <span>{label}</span>
               </button>
