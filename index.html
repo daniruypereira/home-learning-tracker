@@ -21,6 +21,9 @@
   <!-- SheetJS for .xlsx / .xls Spreadsheet Uploads -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 
+  <!-- Self-contained QR Code Library (Renders QR codes locally in browser without external image requests) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+
   <!-- React 18 & Babel Standalone (Runs JSX directly in browser on GitHub Pages) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -90,7 +93,8 @@
       GraduationCap: (p) => <Icon {...p}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></Icon>,
       BellOff: (p) => <Icon {...p}><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></Icon>,
       Cloud: (p) => <Icon {...p}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></Icon>,
-      CloudCheck: (p) => <Icon {...p}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="m9 14 2 2 4-4"/></Icon>
+      CloudCheck: (p) => <Icon {...p}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="m9 14 2 2 4-4"/></Icon>,
+      QrCode: (p) => <Icon {...p}><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></Icon>
     };
 
     // --- PRIVACY-SAFE GENERIC SAMPLE PUPILS GENERATOR ---
@@ -556,6 +560,8 @@
       const [cloudStatus, setCloudStatus] = useState('local');
       const [lastCloudSync, setLastCloudSync] = useState('');
       const [transferUrl, setTransferUrl] = useState('');
+      const [qrDataUrl, setQrDataUrl] = useState('');
+      const [qrMode, setQrMode] = useState('full'); // 'full' = all data inside QR, 'code' = sync code only
       const backupFileInputRef = useRef(null);
       const isApplyingCloudRef = useRef(false);
 
@@ -677,12 +683,13 @@
         localStorage.setItem('hw_tracker_cloud_id', newId);
         setCloudSyncId(newId);
         setCloudSyncInput(newId);
+        buildQrCodeImage(newId);
 
         const ok = await pushToCloudId(newId, { classes, tests, selectedClassId, a11y });
         if (ok) {
-          showToast(`Sync Code "${newId}" active! Enter it on your other device.`);
+          showToast(`QR & Sync Code "${newId}" generated! Scan with your phone camera.`);
         } else {
-          showToast(`Sync Code "${newId}" created. If school Wi-Fi blocks cloud, use the Transfer Link / QR below!`);
+          showToast(`QR Code generated! Scan with your phone camera to transfer everything offline.`);
         }
       };
 
@@ -705,14 +712,27 @@
         showToast('Disconnected sync code on this device.');
       };
 
-      // --- DIRECT URL HASH TRANSFER (WORKS 100% OFFLINE / THROUGH ANY SCHOOL FIREWALL) ---
+      // --- DIRECT URL HASH TRANSFER + LOCAL QR CODE GENERATOR ---
+      const buildCompactTransferPayload = () => {
+        // Ultra-compact encoding so all classes, pupils, ticks & tests fit cleanly in a single QR code
+        const compactClasses = classes.map((cls) => ({
+          i: cls.id,
+          n: cls.name,
+          p: cls.pupils.map((p) => [p.no, p.lastName, p.firstName, p.tutorGroup || '']),
+          h: cls.homeworks.map((hw) => {
+            const doneIndexes = hw.completedIds
+              .map((pid) => cls.pupils.findIndex((p) => p.id === pid))
+              .filter((idx) => idx !== -1);
+            return [hw.title, hw.date, hw.saved ? 1 : 0, doneIndexes];
+          })
+        }));
+        const compactTests = tests.map((t) => [t.title, t.date, t.classIds, t.noHomeworkWeek ? 1 : 0]);
+        return { v: 2, c: compactClasses, t: compactTests, s: selectedClassId };
+      };
+
       const buildDirectTransferLink = () => {
         try {
-          const compact = {
-            c: classes,
-            t: tests,
-            s: selectedClassId
-          };
+          const compact = buildCompactTransferPayload();
           const jsonStr = JSON.stringify(compact);
           const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
           const baseUrl = window.location.href.split('#')[0];
@@ -722,6 +742,50 @@
         } catch {
           return '';
         }
+      };
+
+      const buildQrCodeImage = (overrideSyncId = null) => {
+        const fullLink = buildDirectTransferLink();
+        const activeCode = overrideSyncId || cloudSyncId;
+        const baseUrl = window.location.href.split('#')[0];
+        const codeOnlyLink = activeCode ? `${baseUrl}#code=${encodeURIComponent(activeCode)}` : fullLink;
+
+        // Try full offline data QR first (unless payload exceeds ~2,100 chars, then fallback to code/compact)
+        const targetText =
+          qrMode === 'code' && activeCode
+            ? codeOnlyLink
+            : fullLink && fullLink.length <= 2200
+            ? fullLink
+            : codeOnlyLink || fullLink;
+
+        if (!targetText) return;
+
+        try {
+          if (typeof window.qrcode === 'function') {
+            const qr = window.qrcode(0, 'L');
+            qr.addData(targetText);
+            qr.make();
+            const dataUrl = qr.createDataURL(6, 12);
+            setQrDataUrl(dataUrl);
+            return;
+          }
+        } catch {
+          // If full payload is too dense for QR, automatically fall back to Sync Code QR
+          try {
+            if (typeof window.qrcode === 'function' && codeOnlyLink) {
+              const qr2 = window.qrcode(0, 'M');
+              qr2.addData(codeOnlyLink);
+              qr2.make();
+              setQrDataUrl(qr2.createDataURL(8, 12));
+              return;
+            }
+          } catch {}
+        }
+
+        // Fallback image URL if qrcode library hasn't loaded yet
+        setQrDataUrl(
+          `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=${encodeURIComponent(targetText)}`
+        );
       };
 
       const handleCopyTransferLink = () => {
@@ -738,20 +802,67 @@
         }
       };
 
-      // Automatically import data if opened via a #sync=... Transfer Link
+      // Automatically import data if opened via a #sync=... or #code=... QR Scan / Transfer Link
       useEffect(() => {
         const hash = window.location.hash || '';
+        if (hash.startsWith('#code=')) {
+          const codeFromQr = decodeURIComponent(hash.slice(6)).trim().toLowerCase();
+          if (codeFromQr) {
+            localStorage.setItem('hw_tracker_cloud_id', codeFromQr);
+            setCloudSyncId(codeFromQr);
+            setCloudSyncInput(codeFromQr);
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            pullFromCloudId(codeFromQr, false);
+          }
+          return;
+        }
         if (hash.startsWith('#sync=')) {
           try {
             const encoded = hash.slice(6);
             const jsonStr = decodeURIComponent(escape(atob(encoded)));
             const parsed = JSON.parse(jsonStr);
-            if (Array.isArray(parsed.c) && parsed.c.length > 0) {
+            if (parsed.v === 2 && Array.isArray(parsed.c) && parsed.c.length > 0) {
+              const restoredClasses = parsed.c.map((cls, cIdx) => {
+                const classId = cls.i || `class-qr-${cIdx}`;
+                const pupils = (cls.p || []).map((row, pIdx) => ({
+                  id: `${classId}-p-${pIdx + 1}`,
+                  no: row[0] ?? pIdx + 1,
+                  lastName: row[1] || '',
+                  firstName: row[2] || '',
+                  tutorGroup: row[3] || ''
+                }));
+                const homeworks = (cls.h || []).map((hwRow, hIdx) => ({
+                  id: `hw-qr-${cIdx}-${hIdx}-${Date.now()}`,
+                  title: hwRow[0] || `Home Learning ${hIdx + 1}`,
+                  date: hwRow[1] || getTodayISO(),
+                  saved: Boolean(hwRow[2]),
+                  completedIds: (hwRow[3] || [])
+                    .map((idx) => pupils[idx]?.id)
+                    .filter(Boolean)
+                }));
+                return { id: classId, name: cls.n || `Class ${cIdx + 1}`, pupils, homeworks };
+              });
+              setClasses(restoredClasses);
+              if (Array.isArray(parsed.t)) {
+                setTests(
+                  parsed.t.map((tRow, tIdx) => ({
+                    id: `test-qr-${tIdx}-${Date.now()}`,
+                    title: tRow[0] || 'Assessment',
+                    date: tRow[1] || getTodayISO(),
+                    classIds: tRow[2] || [],
+                    noHomeworkWeek: Boolean(tRow[3])
+                  }))
+                );
+              }
+              if (parsed.s) setSelectedClassId(parsed.s);
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+              setTimeout(() => showToast('All classes & homework checks imported from QR Code!'), 400);
+            } else if (Array.isArray(parsed.c) && parsed.c.length > 0) {
               setClasses(parsed.c);
               if (Array.isArray(parsed.t)) setTests(parsed.t);
               if (parsed.s) setSelectedClassId(parsed.s);
               window.history.replaceState(null, '', window.location.pathname + window.location.search);
-              setTimeout(() => showToast('Tracker data transferred from your other device!'), 400);
+              setTimeout(() => showToast('Tracker data transferred from QR Code!'), 400);
             }
           } catch {}
         }
@@ -759,27 +870,21 @@
 
       useEffect(() => {
         if (showSyncModal) {
-          buildDirectTransferLink();
+          buildQrCodeImage();
         }
-      }, [showSyncModal, classes, tests, selectedClassId]);
+      }, [showSyncModal, classes, tests, selectedClassId, cloudSyncId, qrMode]);
 
-      // Persist changes locally and auto-push to cloud if a Sync Code is linked
+      // --- LOCAL STORAGE PERSISTENCE & JSON BACKUP HANDLERS ---
       useEffect(() => {
-        try {
-          localStorage.setItem('hw_tracker_classes_v5_anon', JSON.stringify(classes));
-        } catch {}
+        try { localStorage.setItem('hw_tracker_classes_v5_anon', JSON.stringify(classes)); } catch {}
       }, [classes]);
 
       useEffect(() => {
-        try {
-          localStorage.setItem('hw_tracker_tests_v1', JSON.stringify(tests));
-        } catch {}
+        try { localStorage.setItem('hw_tracker_tests_v1', JSON.stringify(tests)); } catch {}
       }, [tests]);
 
       useEffect(() => {
-        try {
-          localStorage.setItem('hw_tracker_selected_class', selectedClassId);
-        } catch {}
+        try { localStorage.setItem('hw_tracker_selected_class', selectedClassId); } catch {}
       }, [selectedClassId]);
 
       useEffect(() => {
@@ -790,32 +895,14 @@
       }, [savedPassword]);
 
       useEffect(() => {
-        try {
-          localStorage.setItem('hw_tracker_theme', darkMode ? 'dark' : 'light');
-        } catch {}
+        try { localStorage.setItem('hw_tracker_theme', darkMode ? 'dark' : 'light'); } catch {}
         if (darkMode) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
       }, [darkMode]);
 
       useEffect(() => {
-        try {
-          localStorage.setItem('hw_tracker_a11y', JSON.stringify(a11y));
-        } catch {}
+        try { localStorage.setItem('hw_tracker_a11y', JSON.stringify(a11y)); } catch {}
       }, [a11y]);
-
-      // Initial pull and auto-push when linked to a Sync Code
-      useEffect(() => {
-        if (!cloudSyncId) return;
-        pullFromCloudId(cloudSyncId, true);
-      }, []);
-
-      useEffect(() => {
-        if (!cloudSyncId || isApplyingCloudRef.current) return;
-        const timer = setTimeout(() => {
-          pushToCloudId(cloudSyncId, { classes, tests, selectedClassId, a11y });
-        }, 600);
-        return () => clearTimeout(timer);
-      }, [classes, tests, selectedClassId, a11y, cloudSyncId]);
 
       const handleExportBackupJSON = () => {
         const backup = { version: 5, exportedAt: new Date().toISOString(), classes, tests, selectedClassId, a11y };
@@ -826,7 +913,7 @@
         a.download = `Home_Learning_Tracker_Backup_${getTodayISO()}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        showToast('Backup file downloaded!');
+        showToast('Tracker backup file downloaded!');
       };
 
       const handleImportBackupJSON = async (e) => {
@@ -849,8 +936,9 @@
         }
       };
 
-      // Clean text-free Home Screen Icon (Apple & Android)
+      // --- CLEAN APPLE & GOOGLE HOME SCREEN ICON GENERATOR ---
       useEffect(() => {
+        document.title = 'The home learning tracker';
         const renderCleanAppIcon = (size) => {
           const canvas = document.createElement('canvas');
           canvas.width = size;
@@ -2133,12 +2221,66 @@
                 </div>
 
                 <div className="space-y-4">
+                  {/* SECTION 1: INSTANT QR CODE TRANSFER (WORKS EVEN WITH SCHOOL WIFI FIREWALLS) */}
+                  <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-extrabold flex items-center gap-1.5">
+                        <Icons.QrCode className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                        <span>1. Instant QR Code (Scan with Phone Camera)</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          buildQrCodeImage();
+                          showToast('QR Code refreshed with your latest ticks!');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-sm"
+                      >
+                        Generate QR Code
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] opacity-85">
+                      Point your <strong>iPhone or Android camera</strong> at this QR Code to open the tracker on your phone with your current classes &amp; homework checks already loaded—no school Wi-Fi needed!
+                    </p>
+
+                    {qrDataUrl && (
+                      <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white border border-[#dcd0ba] shadow-inner">
+                        <img
+                          src={qrDataUrl}
+                          alt="Scan QR code with phone camera to transfer tracker"
+                          className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
+                        />
+                        <span className="mt-2 text-[11px] font-bold text-stone-700 text-center">
+                          Open your phone camera and point it here, then tap the yellow link
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleCopyTransferLink}
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs font-extrabold shadow-sm"
+                      >
+                        Copy Transfer Link
+                      </button>
+                      {cloudSyncId && (
+                        <button
+                          type="button"
+                          onClick={() => setQrMode((m) => (m === 'full' ? 'code' : 'full'))}
+                          className="py-2.5 px-3 rounded-xl border border-[#cbbba0] dark:border-slate-600 text-xs font-bold"
+                        >
+                          {qrMode === 'full' ? 'Use Short Sync-Code QR' : 'Use Full-Data QR'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* SECTION 2: OPTIONAL SYNC CODE */}
                   <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-3">
                     <p className="text-xs font-bold">
-                      1. Automatic Cloud Sync (Phone ↔ Tablet ↔ Desktop)
-                    </p>
-                    <p className="text-[11px] opacity-80">
-                      Click <strong>Generate My Sync Code</strong> on your first device, then paste that same code into your phone, tablet, or classroom PC. Every homework check will stay in sync automatically!
+                      2. Optional Live Sync Code (When Both Devices Are on 5G / Home Wi-Fi)
                     </p>
 
                     {!cloudSyncId ? (
@@ -2146,20 +2288,18 @@
                         type="button"
                         onClick={handleCreateNewCloudSyncCode}
                         disabled={cloudStatus === 'syncing'}
-                        className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-extrabold shadow"
+                        className="w-full py-2.5 px-4 rounded-xl bg-stone-800 hover:bg-stone-700 dark:bg-indigo-600 text-white text-xs font-extrabold shadow"
                       >
-                        {cloudStatus === 'syncing' ? 'Connecting...' : '+ Generate My Personal Sync Code'}
+                        {cloudStatus === 'syncing' ? 'Generating...' : '+ Generate My Personal Sync Code & QR'}
                       </button>
                     ) : (
                       <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-xs flex items-center justify-between gap-2">
                         <div>
                           <span className="font-bold block text-[10px] uppercase opacity-75">Your Active Sync Code:</span>
                           <code className="font-mono font-extrabold text-sm select-all">{cloudSyncId}</code>
-                          {lastCloudSync ? (
+                          {lastCloudSync && (
                             <span className="block text-[10px] opacity-75 mt-0.5">Last synced: {lastCloudSync}</span>
-                          ) : cloudStatus === 'offline' ? (
-                            <span className="block text-[10px] text-amber-800 dark:text-amber-300 font-semibold mt-0.5">School Wi-Fi restricted — use Transfer Link / QR below</span>
-                          ) : null}
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -2195,34 +2335,9 @@
                     </form>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-2.5">
-                    <p className="text-xs font-bold">2. Direct Transfer Link (Bypasses School Wi-Fi Firewalls)</p>
-                    <p className="text-[11px] opacity-80">
-                      If school Wi-Fi blocks cloud sync, tap <strong>Copy Transfer Link</strong> on your 5G phone and send it to yourself (Email, Teams, or WhatsApp). Opening that link on your desktop loads all your ticks immediately!
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleCopyTransferLink}
-                      className="w-full py-2.5 px-3 rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs font-extrabold shadow-sm"
-                    >
-                      Copy Direct Transfer Link
-                    </button>
-                    {transferUrl && (
-                      <input
-                        type="text"
-                        readOnly
-                        value={transferUrl}
-                        onFocus={(e) => e.target.select()}
-                        className={`w-full px-3 py-1.5 rounded-lg border text-[10px] font-mono opacity-80 ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-[#fbf8f2] border-[#dcd0ba]'}`}
-                      />
-                    )}
-                  </div>
-
+                  {/* SECTION 3: MANUAL BACKUP FILE */}
                   <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-2.5">
                     <p className="text-xs font-bold">3. Manual Backup File (Download / Restore)</p>
-                    <p className="text-[11px] opacity-80">
-                      Save a backup copy of all your classes and homework checks to your device or school drive anytime.
-                    </p>
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={handleExportBackupJSON} className="flex-1 py-2.5 px-3 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-xs font-bold flex items-center justify-center gap-1.5">
                         <Icons.Download className="w-4 h-4" />
