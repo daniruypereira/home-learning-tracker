@@ -89,7 +89,8 @@
       Menu: (p) => <Icon {...p}><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></Icon>,
       GraduationCap: (p) => <Icon {...p}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></Icon>,
       BellOff: (p) => <Icon {...p}><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></Icon>,
-      Cloud: (p) => <Icon {...p}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></Icon>
+      Cloud: (p) => <Icon {...p}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></Icon>,
+      CloudCheck: (p) => <Icon {...p}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="m9 14 2 2 4-4"/></Icon>
     };
 
     // --- PRIVACY-SAFE GENERIC SAMPLE PUPILS GENERATOR ---
@@ -554,6 +555,7 @@
       const [cloudSyncInput, setCloudSyncInput] = useState(() => localStorage.getItem('hw_tracker_cloud_id') || '');
       const [cloudStatus, setCloudStatus] = useState('local');
       const [lastCloudSync, setLastCloudSync] = useState('');
+      const [transferUrl, setTransferUrl] = useState('');
       const backupFileInputRef = useRef(null);
       const isApplyingCloudRef = useRef(false);
 
@@ -565,65 +567,122 @@
         setTimeout(() => setToast((prev) => (prev && prev.message === message ? null : prev)), 3500);
       };
 
-      // --- CLOUD PULL & AUTO-PUSH WHEN TEACHER HAS A CLOUD SYNC ID ---
+      // --- MULTI-PROVIDER CLOUD SYNC (SCHOOL WIFI + 5G RESILIENT) ---
       const pullFromCloudId = async (syncId, silent = false) => {
-        if (!syncId) return;
+        if (!syncId) return false;
         const cleanKey = syncId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+        const topicName = `hlt-uk-sync-${cleanKey}`;
+        setCloudStatus('syncing');
+
+        let fetchedData = null;
+
+        // Provider 1: ntfy.sh cached JSON history (uses text/plain so zero CORS preflight & passes most school filters)
         try {
-          setCloudStatus('syncing');
-          const res = await fetch(`https://kvdb.io/A9x7kP3mQ8vR2wL5nJ4tY/${encodeURIComponent(cleanKey)}`, {
+          const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topicName)}/json?poll=1&since=all`, {
             method: 'GET',
             cache: 'no-store'
           });
-          if (res.status === 404) {
-            throw new Error('Sync code not found');
+          if (res.ok) {
+            const rawText = await res.text();
+            const lines = rawText.trim().split('\n').filter(Boolean);
+            for (let i = lines.length - 1; i >= 0; i--) {
+              try {
+                const evt = JSON.parse(lines[i]);
+                if (evt && evt.event === 'message' && evt.message) {
+                  const parsed = JSON.parse(evt.message);
+                  if (parsed && Array.isArray(parsed.classes)) {
+                    fetchedData = parsed;
+                    break;
+                  }
+                }
+              } catch {}
+            }
           }
-          if (!res.ok) throw new Error('Sync fetch failed');
-          const data = await res.json();
+        } catch {}
+
+        // Provider 2: Fallback kvdb
+        if (!fetchedData) {
+          try {
+            const res2 = await fetch(`https://kvdb.io/A9x7kP3mQ8vR2wL5nJ4tY/${encodeURIComponent(cleanKey)}`, {
+              method: 'GET',
+              cache: 'no-store'
+            });
+            if (res2.ok) {
+              const parsed2 = await res2.json();
+              if (parsed2 && Array.isArray(parsed2.classes)) fetchedData = parsed2;
+            }
+          } catch {}
+        }
+
+        if (fetchedData) {
           isApplyingCloudRef.current = true;
-          if (Array.isArray(data.classes) && data.classes.length > 0) setClasses(data.classes);
-          if (Array.isArray(data.tests)) setTests(data.tests);
-          if (data.selectedClassId) setSelectedClassId(data.selectedClassId);
-          if (data.a11y) setA11y((prev) => ({ ...prev, ...data.a11y }));
+          if (fetchedData.classes.length > 0) setClasses(fetchedData.classes);
+          if (Array.isArray(fetchedData.tests)) setTests(fetchedData.tests);
+          if (fetchedData.selectedClassId) setSelectedClassId(fetchedData.selectedClassId);
+          if (fetchedData.a11y) setA11y((prev) => ({ ...prev, ...fetchedData.a11y }));
           setCloudStatus('synced');
           setLastCloudSync(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
           if (!silent) showToast('Synced latest tracker data from cloud!');
-          setTimeout(() => { isApplyingCloudRef.current = false; }, 300);
-        } catch (err) {
-          setCloudStatus('error');
-          if (!silent) showToast('Could not connect to that Sync Code. Check the code or use Backup File.', 'error');
+          setTimeout(() => { isApplyingCloudRef.current = false; }, 350);
+          return true;
+        } else {
+          setCloudStatus('offline');
+          if (!silent) showToast('School Wi-Fi blocked live cloud—use "Copy Transfer Link" or QR Code below!', 'error');
+          return false;
         }
       };
 
       const pushToCloudId = async (syncId, payload) => {
         if (!syncId || isApplyingCloudRef.current) return false;
         const cleanKey = syncId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+        const topicName = `hlt-uk-sync-${cleanKey}`;
+        const bodyStr = JSON.stringify({ ...payload, updatedAt: Date.now() });
+        setCloudStatus('syncing');
+
+        let ok = false;
+
+        // Provider 1: ntfy.sh simple POST (no custom headers = zero CORS preflight block)
         try {
-          setCloudStatus('syncing');
-          const res = await fetch(`https://kvdb.io/A9x7kP3mQ8vR2wL5nJ4tY/${encodeURIComponent(cleanKey)}`, {
+          const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topicName)}`, {
             method: 'POST',
-            body: JSON.stringify({ ...payload, updatedAt: Date.now() })
+            body: bodyStr
           });
-          if (!res.ok) throw new Error('Push failed');
+          if (res.ok) ok = true;
+        } catch {}
+
+        // Provider 2: Fallback kvdb
+        if (!ok) {
+          try {
+            const res2 = await fetch(`https://kvdb.io/A9x7kP3mQ8vR2wL5nJ4tY/${encodeURIComponent(cleanKey)}`, {
+              method: 'POST',
+              body: bodyStr
+            });
+            if (res2.ok) ok = true;
+          } catch {}
+        }
+
+        if (ok) {
           setCloudStatus('synced');
           setLastCloudSync(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
           return true;
-        } catch {
-          setCloudStatus('error');
+        } else {
+          setCloudStatus('offline');
           return false;
         }
       };
 
       const handleCreateNewCloudSyncCode = async () => {
         const newId = `hlt-${Math.random().toString(36).slice(2, 6)}-${Math.random().toString(36).slice(2, 6)}`;
+        // Always show & save the code immediately even if school Wi-Fi is restricted
+        localStorage.setItem('hw_tracker_cloud_id', newId);
+        setCloudSyncId(newId);
+        setCloudSyncInput(newId);
+
         const ok = await pushToCloudId(newId, { classes, tests, selectedClassId, a11y });
         if (ok) {
-          localStorage.setItem('hw_tracker_cloud_id', newId);
-          setCloudSyncId(newId);
-          setCloudSyncInput(newId);
-          showToast(`Personal Sync Code "${newId}" created! Enter this code on your other devices.`);
+          showToast(`Sync Code "${newId}" active! Enter it on your other device.`);
         } else {
-          showToast('Cloud sync is blocked on this network. You can use Download / Restore Backup below.', 'error');
+          showToast(`Sync Code "${newId}" created. If school Wi-Fi blocks cloud, use the Transfer Link / QR below!`);
         }
       };
 
@@ -643,21 +702,119 @@
         setCloudSyncInput('');
         setCloudStatus('local');
         setLastCloudSync('');
-        showToast('Disconnected cloud sync on this device.');
+        showToast('Disconnected sync code on this device.');
       };
 
-      useEffect(() => {
-        if (cloudSyncId) {
-          pullFromCloudId(cloudSyncId, true);
+      // --- DIRECT URL HASH TRANSFER (WORKS 100% OFFLINE / THROUGH ANY SCHOOL FIREWALL) ---
+      const buildDirectTransferLink = () => {
+        try {
+          const compact = {
+            c: classes,
+            t: tests,
+            s: selectedClassId
+          };
+          const jsonStr = JSON.stringify(compact);
+          const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
+          const baseUrl = window.location.href.split('#')[0];
+          const fullUrl = `${baseUrl}#sync=${encoded}`;
+          setTransferUrl(fullUrl);
+          return fullUrl;
+        } catch {
+          return '';
         }
-      }, [cloudSyncId]);
+      };
+
+      const handleCopyTransferLink = () => {
+        const link = buildDirectTransferLink();
+        if (!link) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(link).then(() => {
+            showToast('Transfer link copied! Send it to your other device (WhatsApp/Email/Teams) and open it.');
+          }).catch(() => {
+            showToast('Link generated below—copy it and open on your other device!');
+          });
+        } else {
+          showToast('Link generated below—copy it and open on your other device!');
+        }
+      };
+
+      // Automatically import data if opened via a #sync=... Transfer Link
+      useEffect(() => {
+        const hash = window.location.hash || '';
+        if (hash.startsWith('#sync=')) {
+          try {
+            const encoded = hash.slice(6);
+            const jsonStr = decodeURIComponent(escape(atob(encoded)));
+            const parsed = JSON.parse(jsonStr);
+            if (Array.isArray(parsed.c) && parsed.c.length > 0) {
+              setClasses(parsed.c);
+              if (Array.isArray(parsed.t)) setTests(parsed.t);
+              if (parsed.s) setSelectedClassId(parsed.s);
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+              setTimeout(() => showToast('Tracker data transferred from your other device!'), 400);
+            }
+          } catch {}
+        }
+      }, []);
+
+      useEffect(() => {
+        if (showSyncModal) {
+          buildDirectTransferLink();
+        }
+      }, [showSyncModal, classes, tests, selectedClassId]);
+
+      // Persist changes locally and auto-push to cloud if a Sync Code is linked
+      useEffect(() => {
+        try {
+          localStorage.setItem('hw_tracker_classes_v5_anon', JSON.stringify(classes));
+        } catch {}
+      }, [classes]);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('hw_tracker_tests_v1', JSON.stringify(tests));
+        } catch {}
+      }, [tests]);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('hw_tracker_selected_class', selectedClassId);
+        } catch {}
+      }, [selectedClassId]);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('hw_tracker_password', savedPassword);
+          setPasswordInputField(savedPassword);
+        } catch {}
+      }, [savedPassword]);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('hw_tracker_theme', darkMode ? 'dark' : 'light');
+        } catch {}
+        if (darkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, [darkMode]);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('hw_tracker_a11y', JSON.stringify(a11y));
+        } catch {}
+      }, [a11y]);
+
+      // Initial pull and auto-push when linked to a Sync Code
+      useEffect(() => {
+        if (!cloudSyncId) return;
+        pullFromCloudId(cloudSyncId, true);
+      }, []);
 
       useEffect(() => {
         if (!cloudSyncId || isApplyingCloudRef.current) return;
-        const t = setTimeout(() => {
+        const timer = setTimeout(() => {
           pushToCloudId(cloudSyncId, { classes, tests, selectedClassId, a11y });
-        }, 700);
-        return () => clearTimeout(t);
+        }, 600);
+        return () => clearTimeout(timer);
       }, [classes, tests, selectedClassId, a11y, cloudSyncId]);
 
       const handleExportBackupJSON = () => {
@@ -669,7 +826,7 @@
         a.download = `Home_Learning_Tracker_Backup_${getTodayISO()}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        showToast('Tracker backup file downloaded!');
+        showToast('Backup file downloaded!');
       };
 
       const handleImportBackupJSON = async (e) => {
@@ -692,26 +849,7 @@
         }
       };
 
-      useEffect(() => {
-        const handleClickOutside = (e) => {
-          if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-        };
-        if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-      }, [menuOpen]);
-
-      useEffect(() => { localStorage.setItem('hw_tracker_classes_v5_anon', JSON.stringify(classes)); }, [classes]);
-      useEffect(() => { localStorage.setItem('hw_tracker_tests_v1', JSON.stringify(tests)); }, [tests]);
-      useEffect(() => { localStorage.setItem('hw_tracker_selected_class', selectedClassId); }, [selectedClassId]);
-      useEffect(() => { localStorage.setItem('hw_tracker_password', savedPassword); setPasswordInputField(savedPassword); }, [savedPassword]);
-      useEffect(() => { localStorage.setItem('hw_tracker_a11y', JSON.stringify(a11y)); }, [a11y]);
-      useEffect(() => {
-        localStorage.setItem('hw_tracker_theme', darkMode ? 'dark' : 'light');
-        if (darkMode) document.documentElement.classList.add('dark');
-        else document.documentElement.classList.remove('dark');
-      }, [darkMode]);
-
-      // Inject Apple & Google Home Screen App Icon (Word-free)
+      // Clean text-free Home Screen Icon (Apple & Android)
       useEffect(() => {
         const renderCleanAppIcon = (size) => {
           const canvas = document.createElement('canvas');
@@ -726,15 +864,6 @@
           ctx.fillStyle = bgGrad;
           ctx.fillRect(0, 0, size, size);
 
-          const inset = size * 0.055;
-          const radius = size * 0.16;
-          ctx.strokeStyle = '#d5c6ad';
-          ctx.lineWidth = Math.max(2, size * 0.012);
-          ctx.beginPath();
-          if (ctx.roundRect) ctx.roundRect(inset, inset, size - inset * 2, size - inset * 2, radius);
-          else ctx.rect(inset, inset, size - inset * 2, size - inset * 2);
-          ctx.stroke();
-
           const cx = size * 0.5;
           const cy = size * 0.51;
           const bookW = size * 0.54;
@@ -744,17 +873,25 @@
 
           ctx.fillStyle = '#4a3b2c';
           ctx.beginPath();
-          if (ctx.roundRect) ctx.roundRect(bx - size * 0.02, by + size * 0.01, bookW + size * 0.04, bookH + size * 0.018, size * 0.045);
-          else ctx.rect(bx - size * 0.02, by + size * 0.01, bookW + size * 0.04, bookH + size * 0.018);
+          if (ctx.roundRect) {
+            ctx.roundRect(bx - size * 0.02, by + size * 0.01, bookW + size * 0.04, bookH + size * 0.018, size * 0.045);
+          } else {
+            ctx.rect(bx - size * 0.02, by + size * 0.01, bookW + size * 0.04, bookH + size * 0.018);
+          }
           ctx.fill();
 
           const pageGap = size * 0.012;
           const pageW = (bookW - pageGap) / 2;
 
           ctx.fillStyle = '#fffdf9';
-          ctx.fillRect(bx, by, pageW, bookH);
+          ctx.beginPath();
+          ctx.rect(bx, by, pageW, bookH);
+          ctx.fill();
+
           ctx.fillStyle = '#faf5eb';
-          ctx.fillRect(bx + pageW + pageGap, by, pageW, bookH);
+          ctx.beginPath();
+          ctx.rect(bx + pageW + pageGap, by, pageW, bookH);
+          ctx.fill();
 
           const drawCheck = (x, y, s, color) => {
             ctx.strokeStyle = color;
@@ -1169,9 +1306,25 @@
                 <div className="w-12 h-12 rounded-2xl bg-stone-800 dark:bg-indigo-600 flex items-center justify-center text-amber-50 dark:text-white shadow-lg">
                   <Icons.Lock className="w-6 h-6" />
                 </div>
-                <button type="button" onClick={() => setDarkMode(!darkMode)} className={`p-2.5 rounded-xl border ${darkMode ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-[#f2ebe0] border-[#ded2bd] text-[#5e5243]'}`}>
-                  {darkMode ? <Icons.Sun className="w-5 h-5" /> : <Icons.Moon className="w-5 h-5" />}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSyncModal(true)}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 ${
+                      cloudSyncId
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : darkMode
+                        ? 'bg-slate-800 border-slate-700 text-emerald-400'
+                        : 'bg-[#f2ebe0] border-[#ded2bd] text-emerald-800'
+                    }`}
+                  >
+                    <Icons.Cloud className="w-4 h-4" />
+                    <span>{cloudSyncId ? 'Synced' : 'Sync'}</span>
+                  </button>
+                  <button type="button" onClick={() => setDarkMode(!darkMode)} className={`p-2.5 rounded-xl border ${darkMode ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-[#f2ebe0] border-[#ded2bd] text-[#5e5243]'}`}>
+                    {darkMode ? <Icons.Sun className="w-5 h-5" /> : <Icons.Moon className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
               <h1 className="text-2xl font-extrabold tracking-tight mb-1">The home learning tracker</h1>
               <p className={`text-sm mb-6 ${darkMode ? 'text-slate-400' : 'text-[#6e604f]'}`}>
@@ -1382,38 +1535,42 @@
 
           {/* Top Sticky Header */}
           <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-[#fbf8f2]/95 border-[#e2d7c3]'}`}>
-            <div className="max-w-[1440px] mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-stone-800 dark:bg-indigo-600 flex items-center justify-center text-amber-50 dark:text-white shadow-md shrink-0">
+            <div className="max-w-[1440px] mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-stone-800 dark:bg-indigo-600 flex items-center justify-center text-amber-50 dark:text-white shadow-md shrink-0">
                   <Icons.ClipboardCheck className="w-5 h-5" />
                 </div>
-                <h1 className="text-lg sm:text-xl font-extrabold tracking-tight truncate">The home learning tracker</h1>
+                <h1 className="text-base sm:text-xl font-extrabold tracking-tight truncate">The home learning tracker</h1>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowSyncModal(true)}
-                  className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition ${
+                  className={`px-3 py-2 rounded-2xl border text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition ${
                     cloudSyncId && cloudStatus === 'synced'
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/25'
+                      ? 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-500'
                       : cloudStatus === 'error'
-                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300'
+                      ? 'bg-rose-600 border-rose-600 text-white'
                       : darkMode
-                      ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                      : 'bg-[#f2ebe0] border-[#ded2bd] text-[#2c251d] hover:bg-[#e7dcc8]'
+                      ? 'bg-slate-800 border-slate-700 text-emerald-400 hover:bg-slate-700'
+                      : 'bg-[#ede5d6] border-[#d5c6ad] text-emerald-900 hover:bg-[#e3d7c1]'
                   }`}
                   title="Sync across Phone, Tablet & Desktop"
                 >
-                  <Icons.Cloud className={`w-4 h-4 ${cloudStatus === 'syncing' ? 'animate-pulse' : ''}`} />
+                  {cloudSyncId ? (
+                    <Icons.CloudCheck className={`w-4 h-4 shrink-0 ${cloudStatus === 'syncing' ? 'animate-pulse' : ''}`} />
+                  ) : (
+                    <Icons.Cloud className={`w-4 h-4 shrink-0 ${cloudStatus === 'syncing' ? 'animate-pulse' : ''}`} />
+                  )}
                   <span>
                     {cloudSyncId
                       ? cloudStatus === 'syncing'
                         ? 'Syncing...'
                         : cloudStatus === 'error'
-                        ? 'Sync Retry'
+                        ? 'Retry'
                         : 'Synced'
-                      : 'Sync Devices'}
+                      : 'Sync'}
                   </span>
                 </button>
 
@@ -1991,14 +2148,18 @@
                         disabled={cloudStatus === 'syncing'}
                         className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-extrabold shadow"
                       >
-                        {cloudStatus === 'syncing' ? 'Creating Sync Code...' : '+ Generate My Personal Sync Code'}
+                        {cloudStatus === 'syncing' ? 'Connecting...' : '+ Generate My Personal Sync Code'}
                       </button>
                     ) : (
                       <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-xs flex items-center justify-between gap-2">
                         <div>
                           <span className="font-bold block text-[10px] uppercase opacity-75">Your Active Sync Code:</span>
                           <code className="font-mono font-extrabold text-sm select-all">{cloudSyncId}</code>
-                          {lastCloudSync && <span className="block text-[10px] opacity-75 mt-0.5">Last synced: {lastCloudSync}</span>}
+                          {lastCloudSync ? (
+                            <span className="block text-[10px] opacity-75 mt-0.5">Last synced: {lastCloudSync}</span>
+                          ) : cloudStatus === 'offline' ? (
+                            <span className="block text-[10px] text-amber-800 dark:text-amber-300 font-semibold mt-0.5">School Wi-Fi restricted — use Transfer Link / QR below</span>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -2035,7 +2196,30 @@
                   </div>
 
                   <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-2.5">
-                    <p className="text-xs font-bold">2. Manual Backup File (Download / Restore)</p>
+                    <p className="text-xs font-bold">2. Direct Transfer Link (Bypasses School Wi-Fi Firewalls)</p>
+                    <p className="text-[11px] opacity-80">
+                      If school Wi-Fi blocks cloud sync, tap <strong>Copy Transfer Link</strong> on your 5G phone and send it to yourself (Email, Teams, or WhatsApp). Opening that link on your desktop loads all your ticks immediately!
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCopyTransferLink}
+                      className="w-full py-2.5 px-3 rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs font-extrabold shadow-sm"
+                    >
+                      Copy Direct Transfer Link
+                    </button>
+                    {transferUrl && (
+                      <input
+                        type="text"
+                        readOnly
+                        value={transferUrl}
+                        onFocus={(e) => e.target.select()}
+                        className={`w-full px-3 py-1.5 rounded-lg border text-[10px] font-mono opacity-80 ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-[#fbf8f2] border-[#dcd0ba]'}`}
+                      />
+                    )}
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-2.5">
+                    <p className="text-xs font-bold">3. Manual Backup File (Download / Restore)</p>
                     <p className="text-[11px] opacity-80">
                       Save a backup copy of all your classes and homework checks to your device or school drive anytime.
                     </p>
