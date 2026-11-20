@@ -561,9 +561,11 @@
       const [lastCloudSync, setLastCloudSync] = useState('');
       const [transferUrl, setTransferUrl] = useState('');
       const [qrDataUrl, setQrDataUrl] = useState('');
-      const [qrMode, setQrMode] = useState('full'); // 'full' = all data inside QR, 'code' = sync code only
+      const [isScanningQr, setIsScanningQr] = useState(false);
+      const [qrScanError, setQrScanError] = useState('');
+      const videoRef = useRef(null);
+      const scanStreamRef = useRef(null);
       const backupFileInputRef = useRef(null);
-      const isApplyingCloudRef = useRef(false);
 
       const [toast, setToast] = useState(null);
       const [confirmDialog, setConfirmDialog] = useState(null);
@@ -573,148 +575,8 @@
         setTimeout(() => setToast((prev) => (prev && prev.message === message ? null : prev)), 3500);
       };
 
-      // --- MULTI-PROVIDER CLOUD SYNC (SCHOOL WIFI + 5G RESILIENT) ---
-      const pullFromCloudId = async (syncId, silent = false) => {
-        if (!syncId) return false;
-        const cleanKey = syncId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
-        const topicName = `hlt-uk-sync-${cleanKey}`;
-        setCloudStatus('syncing');
-
-        let fetchedData = null;
-
-        // Provider 1: ntfy.sh cached JSON history (uses text/plain so zero CORS preflight & passes most school filters)
-        try {
-          const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topicName)}/json?poll=1&since=all`, {
-            method: 'GET',
-            cache: 'no-store'
-          });
-          if (res.ok) {
-            const rawText = await res.text();
-            const lines = rawText.trim().split('\n').filter(Boolean);
-            for (let i = lines.length - 1; i >= 0; i--) {
-              try {
-                const evt = JSON.parse(lines[i]);
-                if (evt && evt.event === 'message' && evt.message) {
-                  const parsed = JSON.parse(evt.message);
-                  if (parsed && Array.isArray(parsed.classes)) {
-                    fetchedData = parsed;
-                    break;
-                  }
-                }
-              } catch {}
-            }
-          }
-        } catch {}
-
-        // Provider 2: Fallback kvdb
-        if (!fetchedData) {
-          try {
-            const res2 = await fetch(`https://kvdb.io/A9x7kP3mQ8vR2wL5nJ4tY/${encodeURIComponent(cleanKey)}`, {
-              method: 'GET',
-              cache: 'no-store'
-            });
-            if (res2.ok) {
-              const parsed2 = await res2.json();
-              if (parsed2 && Array.isArray(parsed2.classes)) fetchedData = parsed2;
-            }
-          } catch {}
-        }
-
-        if (fetchedData) {
-          isApplyingCloudRef.current = true;
-          if (fetchedData.classes.length > 0) setClasses(fetchedData.classes);
-          if (Array.isArray(fetchedData.tests)) setTests(fetchedData.tests);
-          if (fetchedData.selectedClassId) setSelectedClassId(fetchedData.selectedClassId);
-          if (fetchedData.a11y) setA11y((prev) => ({ ...prev, ...fetchedData.a11y }));
-          setCloudStatus('synced');
-          setLastCloudSync(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-          if (!silent) showToast('Synced latest tracker data from cloud!');
-          setTimeout(() => { isApplyingCloudRef.current = false; }, 350);
-          return true;
-        } else {
-          setCloudStatus('offline');
-          if (!silent) showToast('School Wi-Fi blocked live cloud—use "Copy Transfer Link" or QR Code below!', 'error');
-          return false;
-        }
-      };
-
-      const pushToCloudId = async (syncId, payload) => {
-        if (!syncId || isApplyingCloudRef.current) return false;
-        const cleanKey = syncId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
-        const topicName = `hlt-uk-sync-${cleanKey}`;
-        const bodyStr = JSON.stringify({ ...payload, updatedAt: Date.now() });
-        setCloudStatus('syncing');
-
-        let ok = false;
-
-        // Provider 1: ntfy.sh simple POST (no custom headers = zero CORS preflight block)
-        try {
-          const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topicName)}`, {
-            method: 'POST',
-            body: bodyStr
-          });
-          if (res.ok) ok = true;
-        } catch {}
-
-        // Provider 2: Fallback kvdb
-        if (!ok) {
-          try {
-            const res2 = await fetch(`https://kvdb.io/A9x7kP3mQ8vR2wL5nJ4tY/${encodeURIComponent(cleanKey)}`, {
-              method: 'POST',
-              body: bodyStr
-            });
-            if (res2.ok) ok = true;
-          } catch {}
-        }
-
-        if (ok) {
-          setCloudStatus('synced');
-          setLastCloudSync(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-          return true;
-        } else {
-          setCloudStatus('offline');
-          return false;
-        }
-      };
-
-      const handleCreateNewCloudSyncCode = async () => {
-        const newId = `hlt-${Math.random().toString(36).slice(2, 6)}-${Math.random().toString(36).slice(2, 6)}`;
-        // Always show & save the code immediately even if school Wi-Fi is restricted
-        localStorage.setItem('hw_tracker_cloud_id', newId);
-        setCloudSyncId(newId);
-        setCloudSyncInput(newId);
-        buildQrCodeImage(newId);
-
-        const ok = await pushToCloudId(newId, { classes, tests, selectedClassId, a11y });
-        if (ok) {
-          showToast(`QR & Sync Code "${newId}" generated! Scan with your phone camera.`);
-        } else {
-          showToast(`QR Code generated! Scan with your phone camera to transfer everything offline.`);
-        }
-      };
-
-      const handleConnectExistingSyncCode = async (e) => {
-        e.preventDefault();
-        const clean = cloudSyncInput.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
-        if (!clean) return;
-        localStorage.setItem('hw_tracker_cloud_id', clean);
-        setCloudSyncId(clean);
-        setCloudSyncInput(clean);
-        await pullFromCloudId(clean, false);
-      };
-
-      const handleDisconnectCloudSync = () => {
-        localStorage.removeItem('hw_tracker_cloud_id');
-        setCloudSyncId('');
-        setCloudSyncInput('');
-        setCloudStatus('local');
-        setLastCloudSync('');
-        showToast('Disconnected sync code on this device.');
-      };
-
-      // --- DIRECT URL HASH TRANSFER + LOCAL QR CODE GENERATOR ---
+      // --- 100% OFFLINE COMPRESSED QR CODE & DIRECT LINK SYNC (ZERO SCHOOL WIFI NEEDED) ---
       const buildCompactTransferPayload = () => {
-        // Ultra-compact encoding so all classes, pupils, ticks & tests fit cleanly in a single QR code
         const compactClasses = classes.map((cls) => ({
           i: cls.id,
           n: cls.name,
@@ -730,149 +592,192 @@
         return { v: 2, c: compactClasses, t: compactTests, s: selectedClassId };
       };
 
-      const buildDirectTransferLink = () => {
+      const compressPayloadToBase64Url = async (jsonStr) => {
+        try {
+          if (typeof CompressionStream !== 'undefined') {
+            const bytes = new TextEncoder().encode(jsonStr);
+            const cs = new CompressionStream('deflate-raw');
+            const writer = cs.writable.getWriter();
+            writer.write(bytes);
+            writer.close();
+            const buf = await new Response(cs.readable).arrayBuffer();
+            const arr = new Uint8Array(buf);
+            let bin = '';
+            for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+            return 'z.' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          }
+        } catch {}
+        return 'u.' + btoa(unescape(encodeURIComponent(jsonStr))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      };
+
+      const decompressBase64UrlToJson = async (token) => {
+        if (token.startsWith('z.')) {
+          const b64 = token.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const ds = new DecompressionStream('deflate-raw');
+          const writer = ds.writable.getWriter();
+          writer.write(bytes);
+          writer.close();
+          const buf = await new Response(ds.readable).arrayBuffer();
+          return new TextDecoder().decode(buf);
+        }
+        const raw = token.startsWith('u.') ? token.slice(2) : token;
+        const b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+        return decodeURIComponent(escape(atob(b64)));
+      };
+
+      const applyImportedCompactData = (parsed) => {
+        if (parsed.v === 2 && Array.isArray(parsed.c) && parsed.c.length > 0) {
+          const restoredClasses = parsed.c.map((cls, cIdx) => {
+            const classId = cls.i || `class-qr-${cIdx}`;
+            const pupils = (cls.p || []).map((row, pIdx) => ({
+              id: `${classId}-p-${pIdx + 1}`,
+              no: row[0] ?? pIdx + 1,
+              lastName: row[1] || '',
+              firstName: row[2] || '',
+              tutorGroup: row[3] || ''
+            }));
+            const homeworks = (cls.h || []).map((hwRow, hIdx) => ({
+              id: `hw-qr-${cIdx}-${hIdx}-${Date.now()}`,
+              title: hwRow[0] || `Home Learning ${hIdx + 1}`,
+              date: hwRow[1] || getTodayISO(),
+              saved: Boolean(hwRow[2]),
+              completedIds: (hwRow[3] || []).map((idx) => pupils[idx]?.id).filter(Boolean)
+            }));
+            return { id: classId, name: cls.n || `Class ${cIdx + 1}`, pupils, homeworks };
+          });
+          setClasses(restoredClasses);
+          if (Array.isArray(parsed.t)) {
+            setTests(
+              parsed.t.map((tRow, tIdx) => ({
+                id: `test-qr-${tIdx}-${Date.now()}`,
+                title: tRow[0] || 'Assessment',
+                date: tRow[1] || getTodayISO(),
+                classIds: tRow[2] || [],
+                noHomeworkWeek: Boolean(tRow[3])
+              }))
+            );
+          }
+          if (parsed.s) setSelectedClassId(parsed.s);
+          setLastCloudSync(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+          return true;
+        }
+        return false;
+      };
+
+      const buildQrAndTransferLink = async () => {
         try {
           const compact = buildCompactTransferPayload();
-          const jsonStr = JSON.stringify(compact);
-          const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
+          const token = await compressPayloadToBase64Url(JSON.stringify(compact));
           const baseUrl = window.location.href.split('#')[0];
-          const fullUrl = `${baseUrl}#sync=${encoded}`;
+          const fullUrl = `${baseUrl}#sync=${token}`;
           setTransferUrl(fullUrl);
+
+          if (typeof window.qrcode === 'function') {
+            const qr = window.qrcode(0, 'L');
+            qr.addData(fullUrl);
+            qr.make();
+            setQrDataUrl(qr.createDataURL(5, 10));
+          }
           return fullUrl;
         } catch {
           return '';
         }
       };
 
-      const buildQrCodeImage = (overrideSyncId = null) => {
-        const fullLink = buildDirectTransferLink();
-        const activeCode = overrideSyncId || cloudSyncId;
-        const baseUrl = window.location.href.split('#')[0];
-        const codeOnlyLink = activeCode ? `${baseUrl}#code=${encodeURIComponent(activeCode)}` : fullLink;
-
-        // Try full offline data QR first (unless payload exceeds ~2,100 chars, then fallback to code/compact)
-        const targetText =
-          qrMode === 'code' && activeCode
-            ? codeOnlyLink
-            : fullLink && fullLink.length <= 2200
-            ? fullLink
-            : codeOnlyLink || fullLink;
-
-        if (!targetText) return;
-
-        try {
-          if (typeof window.qrcode === 'function') {
-            const qr = window.qrcode(0, 'L');
-            qr.addData(targetText);
-            qr.make();
-            const dataUrl = qr.createDataURL(6, 12);
-            setQrDataUrl(dataUrl);
-            return;
-          }
-        } catch {
-          // If full payload is too dense for QR, automatically fall back to Sync Code QR
-          try {
-            if (typeof window.qrcode === 'function' && codeOnlyLink) {
-              const qr2 = window.qrcode(0, 'M');
-              qr2.addData(codeOnlyLink);
-              qr2.make();
-              setQrDataUrl(qr2.createDataURL(8, 12));
-              return;
-            }
-          } catch {}
-        }
-
-        // Fallback image URL if qrcode library hasn't loaded yet
-        setQrDataUrl(
-          `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=${encodeURIComponent(targetText)}`
-        );
-      };
-
-      const handleCopyTransferLink = () => {
-        const link = buildDirectTransferLink();
+      const handleCopyTransferLink = async () => {
+        const link = await buildQrAndTransferLink();
         if (!link) return;
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(link).then(() => {
-            showToast('Transfer link copied! Send it to your other device (WhatsApp/Email/Teams) and open it.');
+            showToast('Direct Transfer Link copied! Send it to your other device and open it.');
           }).catch(() => {
-            showToast('Link generated below—copy it and open on your other device!');
+            showToast('Transfer link ready below!');
           });
         } else {
-          showToast('Link generated below—copy it and open on your other device!');
+          showToast('Transfer link ready below!');
         }
       };
 
-      // Automatically import data if opened via a #sync=... or #code=... QR Scan / Transfer Link
-      useEffect(() => {
-        const hash = window.location.hash || '';
-        if (hash.startsWith('#code=')) {
-          const codeFromQr = decodeURIComponent(hash.slice(6)).trim().toLowerCase();
-          if (codeFromQr) {
-            localStorage.setItem('hw_tracker_cloud_id', codeFromQr);
-            setCloudSyncId(codeFromQr);
-            setCloudSyncInput(codeFromQr);
-            window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            pullFromCloudId(codeFromQr, false);
-          }
+      const stopQrCameraScanner = () => {
+        if (scanStreamRef.current) {
+          scanStreamRef.current.getTracks().forEach((t) => t.stop());
+          scanStreamRef.current = null;
+        }
+        setIsScanningQr(false);
+      };
+
+      const startQrCameraScanner = async () => {
+        setQrScanError('');
+        if (!('BarcodeDetector' in window)) {
+          setQrScanError('Camera QR scanner is not supported in this browser—just use your phone’s normal Camera app to scan the QR Code on screen!');
           return;
         }
-        if (hash.startsWith('#sync=')) {
-          try {
-            const encoded = hash.slice(6);
-            const jsonStr = decodeURIComponent(escape(atob(encoded)));
-            const parsed = JSON.parse(jsonStr);
-            if (parsed.v === 2 && Array.isArray(parsed.c) && parsed.c.length > 0) {
-              const restoredClasses = parsed.c.map((cls, cIdx) => {
-                const classId = cls.i || `class-qr-${cIdx}`;
-                const pupils = (cls.p || []).map((row, pIdx) => ({
-                  id: `${classId}-p-${pIdx + 1}`,
-                  no: row[0] ?? pIdx + 1,
-                  lastName: row[1] || '',
-                  firstName: row[2] || '',
-                  tutorGroup: row[3] || ''
-                }));
-                const homeworks = (cls.h || []).map((hwRow, hIdx) => ({
-                  id: `hw-qr-${cIdx}-${hIdx}-${Date.now()}`,
-                  title: hwRow[0] || `Home Learning ${hIdx + 1}`,
-                  date: hwRow[1] || getTodayISO(),
-                  saved: Boolean(hwRow[2]),
-                  completedIds: (hwRow[3] || [])
-                    .map((idx) => pupils[idx]?.id)
-                    .filter(Boolean)
-                }));
-                return { id: classId, name: cls.n || `Class ${cIdx + 1}`, pupils, homeworks };
-              });
-              setClasses(restoredClasses);
-              if (Array.isArray(parsed.t)) {
-                setTests(
-                  parsed.t.map((tRow, tIdx) => ({
-                    id: `test-qr-${tIdx}-${Date.now()}`,
-                    title: tRow[0] || 'Assessment',
-                    date: tRow[1] || getTodayISO(),
-                    classIds: tRow[2] || [],
-                    noHomeworkWeek: Boolean(tRow[3])
-                  }))
-                );
-              }
-              if (parsed.s) setSelectedClassId(parsed.s);
-              window.history.replaceState(null, '', window.location.pathname + window.location.search);
-              setTimeout(() => showToast('All classes & homework checks imported from QR Code!'), 400);
-            } else if (Array.isArray(parsed.c) && parsed.c.length > 0) {
-              setClasses(parsed.c);
-              if (Array.isArray(parsed.t)) setTests(parsed.t);
-              if (parsed.s) setSelectedClassId(parsed.s);
-              window.history.replaceState(null, '', window.location.pathname + window.location.search);
-              setTimeout(() => showToast('Tracker data transferred from QR Code!'), 400);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          scanStreamRef.current = stream;
+          setIsScanningQr(true);
+          setTimeout(async () => {
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              await videoRef.current.play();
+              const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+              const scanLoop = async () => {
+                if (!scanStreamRef.current || !videoRef.current) return;
+                try {
+                  const codes = await detector.detect(videoRef.current);
+                  if (codes && codes.length > 0 && codes[0].rawValue) {
+                    const scannedUrl = codes[0].rawValue;
+                    const hashIdx = scannedUrl.indexOf('#sync=');
+                    if (hashIdx !== -1) {
+                      const token = scannedUrl.slice(hashIdx + 6);
+                      const jsonStr = await decompressBase64UrlToJson(token);
+                      const parsed = JSON.parse(jsonStr);
+                      if (applyImportedCompactData(parsed)) {
+                        stopQrCameraScanner();
+                        setShowSyncModal(false);
+                        showToast('All classes & homework checks transferred from QR Code!');
+                        return;
+                      }
+                    }
+                  }
+                } catch {}
+                if (scanStreamRef.current) requestAnimationFrame(scanLoop);
+              };
+              requestAnimationFrame(scanLoop);
             }
-          } catch {}
+          }, 150);
+        } catch {
+          setQrScanError('Could not access camera. Use your phone’s regular Camera app to scan the QR code!');
+        }
+      };
+
+      // Automatically import data when opened via a scanned #sync=... QR Code link
+      useEffect(() => {
+        const hash = window.location.hash || '';
+        if (hash.startsWith('#sync=')) {
+          const token = hash.slice(6);
+          decompressBase64UrlToJson(token)
+            .then((jsonStr) => {
+              const parsed = JSON.parse(jsonStr);
+              if (applyImportedCompactData(parsed)) {
+                window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                setTimeout(() => showToast('All classes & homework checks imported from QR Code!'), 350);
+              }
+            })
+            .catch(() => {});
         }
       }, []);
 
       useEffect(() => {
         if (showSyncModal) {
-          buildQrCodeImage();
+          buildQrAndTransferLink();
+        } else {
+          stopQrCameraScanner();
         }
-      }, [showSyncModal, classes, tests, selectedClassId, cloudSyncId, qrMode]);
+      }, [showSyncModal, classes, tests, selectedClassId]);
 
       // --- LOCAL STORAGE PERSISTENCE & JSON BACKUP HANDLERS ---
       useEffect(() => {
@@ -2203,45 +2108,45 @@
             </div>
           )}
 
-          {/* Cross-Device Sync & Backup Modal */}
+          {/* Cross-Device Sync & Backup Modal (100% Offline QR + Direct Link — Zero School Wi-Fi Needed) */}
           {showSyncModal && (
             <div className="fixed inset-0 z-[60] bg-black/65 flex items-center justify-center p-4 overflow-y-auto">
               <div className={`w-full max-w-lg rounded-3xl p-6 border shadow-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#fbf8f2] border-[#e2d7c3]'}`}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2.5">
                     <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center">
-                      <Icons.Cloud className="w-5 h-5" />
+                      <Icons.QrCode className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-extrabold leading-tight">Sync Across Phone, Tablet &amp; PC</h3>
-                      <p className="text-xs opacity-75">Each teacher gets their own private Sync Code</p>
+                      <h3 className="text-lg font-extrabold leading-tight">Transfer Between Phone &amp; Desktop</h3>
+                      <p className="text-xs opacity-75">100% Offline QR Code — works even when school Wi-Fi blocks cloud sync</p>
                     </div>
                   </div>
                   <button type="button" onClick={() => setShowSyncModal(false)} className="p-2 rounded-xl bg-[#ede5d6] dark:bg-slate-800"><Icons.X className="w-4 h-4" /></button>
                 </div>
 
                 <div className="space-y-4">
-                  {/* SECTION 1: INSTANT QR CODE TRANSFER (WORKS EVEN WITH SCHOOL WIFI FIREWALLS) */}
+                  {/* SECTION 1: SELF-CONTAINED QR CODE (ALL DATA EMBEDDED INSIDE QR) */}
                   <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-extrabold flex items-center gap-1.5">
                         <Icons.QrCode className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-                        <span>1. Instant QR Code (Scan with Phone Camera)</span>
+                        <span>1. Scan QR Code With Your Other Device</span>
                       </p>
                       <button
                         type="button"
-                        onClick={() => {
-                          buildQrCodeImage();
-                          showToast('QR Code refreshed with your latest ticks!');
+                        onClick={async () => {
+                          await buildQrAndTransferLink();
+                          showToast('QR Code updated with your latest ticks!');
                         }}
                         className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-sm"
                       >
-                        Generate QR Code
+                        Refresh QR Code
                       </button>
                     </div>
 
                     <p className="text-[11px] opacity-85">
-                      Point your <strong>iPhone or Android camera</strong> at this QR Code to open the tracker on your phone with your current classes &amp; homework checks already loaded—no school Wi-Fi needed!
+                      All your classes, pupils, homework ticks &amp; tests are compressed <strong>directly inside this QR Code</strong>—no school Wi-Fi or external server is used!
                     </p>
 
                     {qrDataUrl && (
@@ -2249,10 +2154,10 @@
                         <img
                           src={qrDataUrl}
                           alt="Scan QR code with phone camera to transfer tracker"
-                          className="w-52 h-52 sm:w-56 sm:h-56 object-contain"
+                          className="w-56 h-56 sm:w-60 sm:h-60 object-contain"
                         />
                         <span className="mt-2 text-[11px] font-bold text-stone-700 text-center">
-                          Open your phone camera and point it here, then tap the yellow link
+                          Point your iPhone or Android Camera here &amp; tap the link that appears
                         </span>
                       </div>
                     )}
@@ -2263,81 +2168,31 @@
                         onClick={handleCopyTransferLink}
                         className="flex-1 py-2.5 px-3 rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs font-extrabold shadow-sm"
                       >
-                        Copy Transfer Link
+                        Copy Direct Transfer Link
                       </button>
-                      {cloudSyncId && (
-                        <button
-                          type="button"
-                          onClick={() => setQrMode((m) => (m === 'full' ? 'code' : 'full'))}
-                          className="py-2.5 px-3 rounded-xl border border-[#cbbba0] dark:border-slate-600 text-xs font-bold"
-                        >
-                          {qrMode === 'full' ? 'Use Short Sync-Code QR' : 'Use Full-Data QR'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* SECTION 2: OPTIONAL SYNC CODE */}
-                  <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-3">
-                    <p className="text-xs font-bold">
-                      2. Optional Live Sync Code (When Both Devices Are on 5G / Home Wi-Fi)
-                    </p>
-
-                    {!cloudSyncId ? (
                       <button
                         type="button"
-                        onClick={handleCreateNewCloudSyncCode}
-                        disabled={cloudStatus === 'syncing'}
-                        className="w-full py-2.5 px-4 rounded-xl bg-stone-800 hover:bg-stone-700 dark:bg-indigo-600 text-white text-xs font-extrabold shadow"
+                        onClick={isScanningQr ? stopQrCameraScanner : startQrCameraScanner}
+                        className="py-2.5 px-3 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-xs font-extrabold"
                       >
-                        {cloudStatus === 'syncing' ? 'Generating...' : '+ Generate My Personal Sync Code & QR'}
+                        {isScanningQr ? 'Stop Camera' : 'Scan QR With Webcam'}
                       </button>
-                    ) : (
-                      <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-xs flex items-center justify-between gap-2">
-                        <div>
-                          <span className="font-bold block text-[10px] uppercase opacity-75">Your Active Sync Code:</span>
-                          <code className="font-mono font-extrabold text-sm select-all">{cloudSyncId}</code>
-                          {lastCloudSync && (
-                            <span className="block text-[10px] opacity-75 mt-0.5">Last synced: {lastCloudSync}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => pullFromCloudId(cloudSyncId, false)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-                          >
-                            Sync Now
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleDisconnectCloudSync}
-                            className="px-2.5 py-1.5 rounded-lg bg-black/10 dark:bg-white/10 hover:text-rose-600 font-bold text-xs"
-                            title="Unlink Sync Code"
-                          >
-                            Unlink
-                          </button>
-                        </div>
+                    </div>
+
+                    {isScanningQr && (
+                      <div className="rounded-2xl overflow-hidden border border-[#dcd0ba] bg-black">
+                        <video ref={videoRef} className="w-full max-h-56 object-cover" muted playsInline />
                       </div>
                     )}
-
-                    <form onSubmit={handleConnectExistingSyncCode} className="flex gap-2 pt-1">
-                      <input
-                        type="text"
-                        value={cloudSyncInput}
-                        onChange={(e) => setCloudSyncInput(e.target.value)}
-                        placeholder="Or paste existing Sync Code here..."
-                        className={`flex-1 px-3 py-2 rounded-xl border text-xs font-mono ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-[#fbf8f2] border-[#dcd0ba]'}`}
-                      />
-                      <button type="submit" className="px-4 py-2 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-xs font-bold">
-                        Link Device
-                      </button>
-                    </form>
+                    {qrScanError && <p className="text-[11px] text-rose-600 font-bold">{qrScanError}</p>}
                   </div>
 
-                  {/* SECTION 3: MANUAL BACKUP FILE */}
+                  {/* SECTION 2: MANUAL BACKUP FILE */}
                   <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-2.5">
-                    <p className="text-xs font-bold">3. Manual Backup File (Download / Restore)</p>
+                    <p className="text-xs font-bold">2. Backup File (Download / Restore)</p>
+                    <p className="text-[11px] opacity-80">
+                      Save a backup file to OneDrive / Google Drive or USB, and restore it on any computer.
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={handleExportBackupJSON} className="flex-1 py-2.5 px-3 rounded-xl bg-stone-800 dark:bg-indigo-600 text-white text-xs font-bold flex items-center justify-center gap-1.5">
                         <Icons.Download className="w-4 h-4" />
