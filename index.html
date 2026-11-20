@@ -561,6 +561,8 @@
       const [lastCloudSync, setLastCloudSync] = useState('');
       const [transferUrl, setTransferUrl] = useState('');
       const [qrDataUrl, setQrDataUrl] = useState('');
+      const [qrScope, setQrScope] = useState('all'); // 'all' or 'current' class for ultra-dense fast scanning
+      const [qrCharCount, setQrCharCount] = useState(0);
       const [isScanningQr, setIsScanningQr] = useState(false);
       const [qrScanError, setQrScanError] = useState('');
       const videoRef = useRef(null);
@@ -576,8 +578,11 @@
       };
 
       // --- 100% OFFLINE COMPRESSED QR CODE & DIRECT LINK SYNC (ZERO SCHOOL WIFI NEEDED) ---
-      const buildCompactTransferPayload = () => {
-        const compactClasses = classes.map((cls) => ({
+      const buildCompactTransferPayload = (scope = qrScope) => {
+        const targetClasses =
+          scope === 'current' && currentClass ? [currentClass] : classes;
+
+        const compactClasses = targetClasses.map((cls) => ({
           i: cls.id,
           n: cls.name,
           p: cls.pupils.map((p) => [p.no, p.lastName, p.firstName, p.tutorGroup || '']),
@@ -588,8 +593,19 @@
             return [hw.title, hw.date, hw.saved ? 1 : 0, doneIndexes];
           })
         }));
-        const compactTests = tests.map((t) => [t.title, t.date, t.classIds, t.noHomeworkWeek ? 1 : 0]);
-        return { v: 2, c: compactClasses, t: compactTests, s: selectedClassId };
+
+        const compactTests =
+          scope === 'current'
+            ? []
+            : tests.map((t) => [t.title, t.date, t.classIds, t.noHomeworkWeek ? 1 : 0]);
+
+        return {
+          v: 2,
+          m: scope === 'current' ? 'merge' : 'replace',
+          c: compactClasses,
+          t: compactTests,
+          s: currentClass ? currentClass.id : selectedClassId
+        };
       };
 
       const compressPayloadToBase64Url = async (jsonStr) => {
@@ -648,8 +664,24 @@
             }));
             return { id: classId, name: cls.n || `Class ${cIdx + 1}`, pupils, homeworks };
           });
-          setClasses(restoredClasses);
-          if (Array.isArray(parsed.t)) {
+
+          if (parsed.m === 'merge') {
+            setClasses((prev) => {
+              const next = [...prev];
+              restoredClasses.forEach((impCls) => {
+                const idx = next.findIndex(
+                  (c) => c.id === impCls.id || c.name.trim().toLowerCase() === impCls.name.trim().toLowerCase()
+                );
+                if (idx !== -1) next[idx] = impCls;
+                else next.push(impCls);
+              });
+              return next;
+            });
+          } else {
+            setClasses(restoredClasses);
+          }
+
+          if (Array.isArray(parsed.t) && parsed.t.length > 0) {
             setTests(
               parsed.t.map((tRow, tIdx) => ({
                 id: `test-qr-${tIdx}-${Date.now()}`,
@@ -667,19 +699,20 @@
         return false;
       };
 
-      const buildQrAndTransferLink = async () => {
+      const buildQrAndTransferLink = async (scopeOverride = qrScope) => {
         try {
-          const compact = buildCompactTransferPayload();
+          const compact = buildCompactTransferPayload(scopeOverride);
           const token = await compressPayloadToBase64Url(JSON.stringify(compact));
           const baseUrl = window.location.href.split('#')[0];
           const fullUrl = `${baseUrl}#sync=${token}`;
           setTransferUrl(fullUrl);
+          setQrCharCount(fullUrl.length);
 
           if (typeof window.qrcode === 'function') {
             const qr = window.qrcode(0, 'L');
             qr.addData(fullUrl);
             qr.make();
-            setQrDataUrl(qr.createDataURL(5, 10));
+            setQrDataUrl(qr.createDataURL(6, 12));
           }
           return fullUrl;
         } catch {
@@ -773,11 +806,11 @@
 
       useEffect(() => {
         if (showSyncModal) {
-          buildQrAndTransferLink();
+          buildQrAndTransferLink(qrScope);
         } else {
           stopQrCameraScanner();
         }
-      }, [showSyncModal, classes, tests, selectedClassId]);
+      }, [showSyncModal, qrScope, classes, tests, selectedClassId]);
 
       // --- LOCAL STORAGE PERSISTENCE & JSON BACKUP HANDLERS ---
       useEffect(() => {
@@ -2128,15 +2161,15 @@
                 <div className="space-y-4">
                   {/* SECTION 1: SELF-CONTAINED QR CODE (ALL DATA EMBEDDED INSIDE QR) */}
                   <div className="p-4 rounded-2xl bg-[#f4ede0] dark:bg-slate-800/70 border border-[#dcd0ba] dark:border-slate-700 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs font-extrabold flex items-center gap-1.5">
                         <Icons.QrCode className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-                        <span>1. Scan QR Code With Your Other Device</span>
+                        <span>1. Offline QR Code (No School Wi-Fi Needed)</span>
                       </p>
                       <button
                         type="button"
                         onClick={async () => {
-                          await buildQrAndTransferLink();
+                          await buildQrAndTransferLink(qrScope);
                           showToast('QR Code updated with your latest ticks!');
                         }}
                         className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-sm"
@@ -2145,16 +2178,44 @@
                       </button>
                     </div>
 
+                    {/* Toggle between Current Class (Extra-Large Crisp QR) and All Classes */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setQrScope('current')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-extrabold transition ${
+                          qrScope === 'current'
+                            ? 'bg-stone-800 dark:bg-indigo-600 text-white border-stone-800 dark:border-indigo-500'
+                            : 'bg-[#fbf8f2] dark:bg-slate-900 border-[#dcd0ba] dark:border-slate-700'
+                        }`}
+                      >
+                        Current Class Only ({currentClass?.name}) — Fast Scan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQrScope('all')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-extrabold transition ${
+                          qrScope === 'all'
+                            ? 'bg-stone-800 dark:bg-indigo-600 text-white border-stone-800 dark:border-indigo-500'
+                            : 'bg-[#fbf8f2] dark:bg-slate-900 border-[#dcd0ba] dark:border-slate-700'
+                        }`}
+                      >
+                        All {classes.length} Classes Combined
+                      </button>
+                    </div>
+
                     <p className="text-[11px] opacity-85">
-                      All your classes, pupils, homework ticks &amp; tests are compressed <strong>directly inside this QR Code</strong>—no school Wi-Fi or external server is used!
+                      {qrScope === 'current'
+                        ? `Transfers ${currentClass?.name} with all pupils & homework ticks directly inside a super-easy-to-scan QR Code.`
+                        : 'Transfers all classes, pupils, homework ticks & tests directly inside this QR Code—zero external servers used.'}
                     </p>
 
                     {qrDataUrl && (
                       <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white border border-[#dcd0ba] shadow-inner">
                         <img
                           src={qrDataUrl}
-                          alt="Scan QR code with phone camera to transfer tracker"
-                          className="w-56 h-56 sm:w-60 sm:h-60 object-contain"
+                          alt="Scan QR code with camera to transfer tracker"
+                          className="w-64 h-64 sm:w-72 sm:h-72 object-contain"
                         />
                         <span className="mt-2 text-[11px] font-bold text-stone-700 text-center">
                           Point your iPhone or Android Camera here &amp; tap the link that appears
